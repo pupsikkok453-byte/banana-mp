@@ -1,0 +1,10 @@
+{
+  "name": "banana-mp",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "start": "node server.js" },
+  "dependencies": {
+    "colyseus": "0.14.24",
+    "express": "4.19.2"
+  }
+}
