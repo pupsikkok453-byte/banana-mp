@@ -13,8 +13,7 @@ schema.defineTypes(Player, {
 class Enemy extends schema.Schema {}
 schema.defineTypes(Enemy, {
   type: 'string', x: 'number', z: 'number', y: 'number',
-  hp: 'number', maxHp: 'number', ry: 'number', anim: 'number', isBoss: 'boolean',
-  frozen: 'number'
+  hp: 'number', maxHp: 'number', ry: 'number', anim: 'number', isBoss: 'boolean', frozen: 'number'
 });
 
 class Spider extends schema.Schema {}
@@ -43,7 +42,8 @@ const PVP_ABILITIES = {
   acid_rain: { radius: 7,  dmg: 30, cd: 800 }, repulse: { radius: 10, dmg: 60, cd: 1000 },
   fire_beam: { radius: 36, dmg: 100, cd: 2000 }, fire_fist: { radius: 7,  dmg: 45, cd: 400 },
   rocket: { radius: 10, dmg: 90, cd: 1500 }, kamikaze_spider: { radius: 10, dmg: 80, cd: 5000 },
-  freeze: { radius: 8,  dmg: 20, cd: 3000 }
+  freeze: { radius: 8,  dmg: 20, cd: 3000 },
+  nano_ult: { radius: 50, dmg: 600, cd: 100000 } // ★ НОВАЯ УЛЬТА
 };
 
 const ENEMY_TYPES = {
@@ -92,8 +92,7 @@ class GameRoom extends colyseus.Room {
 
     this.onMessage('mv', (client, d) => {
       const p = this.state.players.get(client.sessionId);
-      if (!p || !d || p.dead) return;
-      if (p.rooted > 0 || p.frozen > 0) return;
+      if (!p || !d || p.dead || p.rooted > 0 || p.frozen > 0) return;
       const now = Date.now();
       if (now - (this.lastMsg.get(client.sessionId) || 0) < 25) return;
       this.lastMsg.set(client.sessionId, now);
@@ -149,13 +148,12 @@ class GameRoom extends colyseus.Room {
       this.playerAttackCd.set(key, Date.now());
       const radius = def.radius, dmg = def.dmg;
 
-      // Игроки
       this.state.players.forEach((tgt, sid) => {
         if (tgt === atk || tgt.dead) return;
         if (Math.sqrt(distXZ(atk, tgt)) > radius || dyAbs(atk, tgt) > 15) return;
         tgt.hp -= dmg;
         if (d.type === 'root_bind') { tgt.rooted = Math.max(tgt.rooted || 0, 2.5); tgt.y = 0; }
-        if (d.type === 'freeze') tgt.frozen = Math.max(tgt.frozen || 0, 2.0);
+        if (d.type === 'freeze') tgt.frozen = Math.max(tgt.frozen || 0, 3.0); // ★ 3 секунды
         this.broadcast('pvp_hit', { attacker: atk.name, target: tgt.name, targetId: sid, damage: dmg, ability: d.type });
         if (tgt.hp <= 0 && !tgt.dead) {
           tgt.dead = true; tgt.hp = 0; tgt.respawnTimer = 6; tgt.rooted = 0; tgt.frozen = 0;
@@ -165,18 +163,29 @@ class GameRoom extends colyseus.Room {
         }
       });
 
-      // ★ ВРАГИ (заморозка и опутывание)
-      if (d.type === 'freeze' || d.type === 'root_bind' || d.type === 'earthquake' || d.type === 'carrot_ult' || d.type === 'hell_explosion') {
-        this.state.enemies.forEach((en, eid) => {
-          if (Math.sqrt(distXZ(atk, en)) > radius) return;
-          en.hp -= dmg;
-          if (d.type === 'freeze') en.frozen = Math.max(en.frozen || 0, 2.0);
-          if (d.type === 'root_bind' && en.y > 0) { en.y = 0; en.anim = 0; }
-          this.lastHitBy.set(eid, client.sessionId);
-          this.broadcast('dmg', { enemyId: eid, amount: dmg, crit: false });
-          if (en.hp <= 0) this.killEnemy(eid);
-        });
-      }
+      this.state.enemies.forEach((en, eid) => {
+        const dx = en.x - atk.x; const dz = en.z - atk.z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        
+        if (d.type === 'nano_ult') {
+          // Конус вперед
+          const fwdX = -Math.sin(atk.ry); const fwdZ = -Math.cos(atk.ry);
+          if (dist <= radius && (dx*fwdX + dz*fwdZ)/dist > 0.5) {
+            en.hp -= dmg; this.lastHitBy.set(eid, client.sessionId);
+            this.broadcast('dmg', { enemyId: eid, amount: dmg, crit: true });
+            if (en.hp <= 0) this.killEnemy(eid);
+          }
+        } else if (d.type === 'freeze' || d.type === 'root_bind' || d.type === 'earthquake' || d.type === 'carrot_ult' || d.type === 'hell_explosion') {
+          if (dist <= radius) {
+            en.hp -= dmg;
+            if (d.type === 'freeze') en.frozen = Math.max(en.frozen || 0, 3.0); // ★ 3 секунды
+            if (d.type === 'root_bind' && en.y > 0) { en.y = 0; en.anim = 0; }
+            this.lastHitBy.set(eid, client.sessionId);
+            this.broadcast('dmg', { enemyId: eid, amount: dmg, crit: false });
+            if (en.hp <= 0) this.killEnemy(eid);
+          }
+        }
+      });
 
       this.broadcast('effect', { type: d.type, x: atk.x, y: atk.y, z: atk.z, bySession: client.sessionId, byName: atk.name, radius: radius }, { except: client });
     });
@@ -368,10 +377,8 @@ class GameRoom extends colyseus.Room {
       if (!p.dead && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + 5 * dt);
     });
 
-    // ★ ПАУКИ (с таймером камикадзе)
     this.state.spiders.forEach((sp, id) => {
-      sp.life -= dt;
-      if (sp.life <= 0) { this.state.spiders.delete(id); this.kamikazeTimers.delete(id); return; }
+      sp.life -= dt; if (sp.life <= 0) { this.state.spiders.delete(id); this.kamikazeTimers.delete(id); return; }
       
       let target = null;
       if (sp.targetId) {
@@ -387,9 +394,9 @@ class GameRoom extends colyseus.Room {
 
       const dx = target.x - sp.x, dz = target.z - sp.z; const dist = Math.sqrt(dx*dx + dz*dz);
 
-      // ★ КАМИКАДЗЕ: прикрепление и таймер
+      // ★ КАМИКАДЗЕ (РАДИУС УВЕЛИЧЕН ДО 4.5)
       if (sp.isKamikaze) {
-        if (dist < 3.5) {
+        if (dist < 4.5) {
           if (!this.kamikazeTimers.has(id)) {
             this.kamikazeTimers.set(id, 2.0);
             this.broadcast('kamikaze_attach', { spiderId: id, targetId: sp.targetId });
@@ -426,7 +433,6 @@ class GameRoom extends colyseus.Room {
         }
       }
 
-      // Обычный паук
       if (dist > 3) {
         const nx = sp.x + dx * (1/(dist||1)) * 14 * dt;
         const nz = sp.z + dz * (1/(dist||1)) * 14 * dt;
@@ -447,7 +453,6 @@ class GameRoom extends colyseus.Room {
       } else { this.attackCooldowns.set(cdKey, (this.attackCooldowns.get(cdKey) || 0) - dt); }
     });
 
-    // ★ ВРАГИ (с учетом frozen)
     this.state.enemies.forEach((en, id) => {
       if (en.frozen > 0) {
         en.frozen = Math.max(0, en.frozen - dt);
