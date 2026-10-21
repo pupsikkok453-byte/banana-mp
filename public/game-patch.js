@@ -1,9 +1,9 @@
 // =======================================================
-// BANANA INDUSTRIES - GLOBAL PATCH (v49)
-// ФИКС КНОПКИ: Моргенкартошка
+// BANANA INDUSTRIES - GLOBAL PATCH (v50)
+// ФИКС: Кнопка клонируется от Банана + Горячая клавиша F10
 // =======================================================
 (function() {
-  console.log("🍌 [PATCH] v49 — Фикс кнопки. Она будет поверх всего.");
+  console.log("🍌 [PATCH] v50 — Загружен. Ищу кнопку Банана для клонирования...");
 
   // ═══ 1. Убираем кусты ═══
   if (typeof addProp === 'function') {
@@ -296,12 +296,14 @@
   if (typeof addRage === 'function') { const origAddRage = window.addRage; window.addRage = function(amount) { if (PEPPER_MODE) { if (typeof addSpiciness === 'function') addSpiciness(amount); return; } if (origAddRage) origAddRage.apply(this, arguments); }; }
 
   // ══════════════════════════════════════════════════════════
-  // ═══ 16. МОРГЕНКАРТОШКА (ФИКС КНОПКИ) ═══
+  // ═══ 16. МОРГЕНКАРТОШКА (v50) ═══
   // ══════════════════════════════════════════════════════════
   
   window.__POTATO_MODE = false;
   window.__POTATO_FORM = 1;
+  window.__bananaBtnRef = null;
 
+  // 1. Модели
   window.createPotatoMesh = function(form) {
     form = (form === 2) ? 2 : 1; 
     var g = new THREE.Group();
@@ -318,74 +320,51 @@
         var belly = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C})); belly.position.set(0, 1.3, 0.5); belly.scale.set(1, 0.9, 0.6); spine.add(belly);
         var head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C})); head.position.y = 2.8; spine.add(head);
         var hair = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 1.0), new THREE.MeshStandardMaterial({color: 0x2a1a0f})); hair.position.set(0, 3.0, -0.1); spine.add(hair);
-        
         var hammerGroup = new THREE.Group();
         var handle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.0, 6), new THREE.MeshStandardMaterial({color: 0x5D4037})); handle.rotation.x = Math.PI/2; hammerGroup.add(handle);
         var headH = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 1.0), new THREE.MeshStandardMaterial({color: 0x9E9E9E})); headH.position.y = 1.0; hammerGroup.add(headH);
         hammerGroup.position.set(0, -1.2, 0.5); armR_shoulder.add(hammerGroup);
-
         var armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.2, 6), new THREE.MeshStandardMaterial({color: 0x8B0000})); armRMesh.position.y = -0.6; armR_shoulder.add(armRMesh);
         var legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.25, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x424242})); legLMesh.position.y = -0.5; legL_hip.add(legLMesh);
         var legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.25, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x424242})); legRMesh.position.y = -0.5; legR_hip.add(legRMesh);
-        
         legL.position.set(-0.3, 1.0, 0); legR.position.set(0.3, 1.0, 0); armR.position.set(1.0, 2.0, 0); armR_shoulder.rotation.z = -0.4;
     } else {
         var body = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 1.5, 10), new THREE.MeshStandardMaterial({color: 0x4a0010})); body.position.y = 1.5; spine.add(body);
         var belly = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 10), new THREE.MeshStandardMaterial({color: 0xFF2200})); belly.position.set(0, 1.2, 0.4); belly.scale.set(1.1, 0.9, 0.9); spine.add(belly);
         var head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 12), new THREE.MeshStandardMaterial({color: 0xFF0000})); head.position.y = 2.7; spine.add(head);
         var hair = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, 1.0), new THREE.MeshStandardMaterial({color: 0x111111})); hair.position.set(0, 3.1, -0.1); spine.add(hair);
-        
         var gloveR = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshStandardMaterial({color: 0x00FF00})); gloveR.position.y = -0.9; armR_shoulder.add(gloveR);
         var gloveL = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshStandardMaterial({color: 0x00FF00})); gloveL.position.y = -0.9; armL_shoulder.add(gloveL);
-        
         var armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x4a0010})); armRMesh.position.y = -0.4; armR_shoulder.add(armRMesh);
         var armLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x4a0010})); armLMesh.position.y = -0.4; armL_shoulder.add(armLMesh);
-        
         var legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.8, 6), new THREE.MeshStandardMaterial({color: 0x111111})); legLMesh.position.y = -0.4; legL_hip.add(legLMesh);
         var legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.8, 6), new THREE.MeshStandardMaterial({color: 0x111111})); legRMesh.position.y = -0.4; legR_hip.add(legRMesh);
-        
         legL.position.set(-0.3, 0.8, 0); legR.position.set(0.3, 0.8, 0); armR.position.set(0.9, 1.6, 0.3); armL.position.set(-0.9, 1.6, 0.3);
     }
     return g;
   };
 
-  // Активация персонажа
-  window.activatePotato = function(e) {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    }
-    console.log('[POTATO] Клик по кнопке! Запуск...');
+  // 2. Активация
+  window.activatePotato = function() {
+    console.log('[POTATO] Активация запущена.');
     
-    // Ищем кнопку Банана и кликаем её
-    let bananaBtn = null;
-    const allBtns = document.querySelectorAll('button, div[onclick], [role="button"]');
-    for (let i = 0; i < allBtns.length; i++) {
-      const b = allBtns[i];
-      const txt = (b.innerText || b.textContent || '').toLowerCase();
-      const onclickStr = b.getAttribute('onclick') || '';
-      if (txt.includes('банан') || onclickStr.includes('equipBanana')) {
-        bananaBtn = b;
-        break;
-      }
-    }
-    
-    if (bananaBtn) {
-      console.log('[POTATO] Нажимаю кнопку Банана:', bananaBtn);
-      bananaBtn.click();
+    // Нажимаем кнопку Банана (если нашли) или вызываем функцию
+    if (window.__bananaBtnRef) {
+      console.log('[POTATO] Кликаю кнопку Банана...');
+      window.__bananaBtnRef.click();
     } else if (typeof equipBanana === 'function') {
-      console.log('[POTATO] Вызываю equipBanana() напрямую.');
+      console.log('[POTATO] Вызываю equipBanana()...');
       equipBanana();
     } else {
-      console.error('[POTATO] Не могу найти кнопку или функцию Банана!');
-      alert('Ошибка: не найдена кнопка Банана. Сообщите разработчику.');
+      console.error('[POTATO] Не найдено ни кнопки Банана, ни функции equipBanana!');
+      alert('Ошибка: не найдена кнопка Банана!');
       return;
     }
 
     setTimeout(() => {
       window.__POTATO_MODE = true;
       window.__POTATO_FORM = 1;
+      console.log('[POTATO] Режим Картошки включен.');
       
       if (player.mesh) player.mesh.visible = false;
       if (typeof Companion !== 'undefined' && Companion.group) Companion.group.visible = false;
@@ -400,69 +379,97 @@
       
       if (window.__MP && window.__MP.room) window.__MP.room.send('charState', { char: 'potato', potatoForm: 1 });
       if (typeof spawnComicPop === 'function' && player.pos) spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'МОРГЕНКАРТОШКА', '#8B4513');
-      console.log('[POTATO] Персонаж активирован.');
-    }, 300);
+    }, 500);
   };
 
-  // УДАЛЯЕМ старую кнопку, если она была (для избежания дублей)
-  const oldBtn = document.getElementById('btn-potato');
-  if (oldBtn) oldBtn.remove();
-
-  // СОЗДАЕМ КНОПКУ СРАЗУ В BODY (поверх всего)
-  const potatoBtn = document.createElement('button');
-  potatoBtn.id = 'btn-potato';
-  potatoBtn.innerHTML = '🥔 ИГРАТЬ ЗА МОРГЕНКАРТОШКУ';
-  potatoBtn.style.cssText = `
-    position: fixed !important;
-    bottom: 30px !important;
-    right: 30px !important;
-    z-index: 2147483647 !important;
-    padding: 15px 30px !important;
-    background: linear-gradient(135deg, #8B4513, #D2691E) !important;
-    color: #fff !important;
-    font-size: 18px !important;
-    font-weight: bold !important;
-    border: 3px solid #FFD700 !important;
-    border-radius: 12px !important;
-    cursor: pointer !important;
-    box-shadow: 0 0 30px rgba(139,69,19,0.8) !important;
-    display: none;
-    pointer-events: auto !important;
-    user-select: none;
-    font-family: 'Bangers', Impact, sans-serif !important;
-    letter-spacing: 1px;
-  `;
-
-  // Обработчик клика с перехватом (capture: true)
-  potatoBtn.addEventListener('click', (e) => {
-    console.log('[POTATO] Click event сработал');
-    window.activatePotato(e);
-  }, true);
-
-  potatoBtn.addEventListener('mousedown', (e) => {
-    console.log('[POTATO] Mousedown event сработал');
-    window.activatePotato(e);
-  }, true);
-
-  document.body.appendChild(potatoBtn);
-
-  // Показ/скрытие кнопки в зависимости от меню
-  setInterval(() => {
-    const cs = document.getElementById('char-select');
-    const isMenuOpen = cs && cs.style.display !== 'none' && cs.style.display !== '';
-    
-    if (isMenuOpen) {
-      potatoBtn.style.display = 'block';
-    } else {
-      potatoBtn.style.display = 'none';
+  // 3. Горячая клавиша F10 (железобетонный запуск)
+  window.addEventListener('keydown', e => {
+    if (e.code === 'F10') {
+      const cs = document.getElementById('char-select');
+      if (cs && cs.style.display !== 'none' && cs.style.display !== '') {
+        e.preventDefault();
+        console.log('[POTATO] F10 нажата в меню. Запускаю Картошку...');
+        window.activatePotato();
+      }
     }
-  }, 200);
+  });
 
-  // Обновление меша (не дает модели исчезнуть)
+  // 4. Поиск кнопки Банана и клонирование
+  const setupPotatoBtn = () => {
+    console.log('[POTATO] Ищу кнопку Банана...');
+    
+    // Ищем кнопку Банана
+    const allElements = document.querySelectorAll('button, div, span, a, [onclick]');
+    let bananaBtn = null;
+    
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i];
+      const oc = el.getAttribute('onclick') || '';
+      if (oc.includes('equipBanana')) { bananaBtn = el; break; }
+      
+      const txt = (el.innerText || el.textContent || '').toLowerCase();
+      if ((txt.includes('банан') || txt.includes('egor') || txt.includes('егор')) && el.offsetWidth > 50) {
+        bananaBtn = el; break;
+      }
+    }
+    
+    if (!bananaBtn) {
+      console.log('[POTATO] Кнопка Банана не найдена. Попробую позже...');
+      return false;
+    }
+    
+    console.log('[POTATO] Кнопка Банана найдена:', bananaBtn);
+    window.__bananaBtnRef = bananaBtn;
+    
+    // Проверяем, есть ли уже наша кнопка
+    if (document.getElementById('btn-potato')) {
+      console.log('[POTATO] Кнопка уже вставлена.');
+      return true;
+    }
+    
+    // Клонируем кнопку Банана
+    const clone = bananaBtn.cloneNode(true);
+    clone.id = 'btn-potato';
+    clone.removeAttribute('onclick'); // Убираем старый обработчик
+    
+    // Меняем текст внутри на "Картошка"
+    // Клонируем структуру, но меняем содержимое
+    clone.innerHTML = '🥔 МОРГЕНКАРТОШКА';
+    
+    // Добавляем свои стили поверх
+    clone.style.cssText += `
+      background: #8B4513 !important;
+      border-color: #FFD700 !important;
+      color: #fff !important;
+      cursor: pointer !important;
+      pointer-events: auto !important;
+      z-index: 9999 !important;
+    `;
+    
+    // Обработчик
+    clone.onclick = function(e) {
+      console.log('[POTATO] Клик по нашей кнопке!');
+      if (e) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
+      window.activatePotato();
+    };
+    
+    // Вставляем клон сразу после кнопки Банана
+    if (bananaBtn.parentNode) {
+      bananaBtn.parentNode.insertBefore(clone, bananaBtn.nextSibling);
+      console.log('[POTATO] Клон кнопки вставлен рядом с Бананом.');
+    }
+    
+    return true;
+  };
+
+  // Пытаемся настроить кнопку при загрузке и периодически
+  setInterval(setupPotatoBtn, 1000);
+  setTimeout(setupPotatoBtn, 500);
+
+  // 5. Пересоздание меша
   const _origRebuildP = window.rebuildHeroMesh;
   window.rebuildHeroMesh = function() {
     if (_origRebuildP) _origRebuildP.apply(this, arguments);
-    
     if (window.__POTATO_MODE) {
       if (player.mesh) player.mesh.visible = false;
       if (playerGroup && (!window.__potatoMesh || !window.__potatoMesh.parent)) {
@@ -478,10 +485,9 @@
     }
   };
 
-  // Смена формы (1 и 2)
+  // 6. Смена формы
   window.addEventListener('keydown', e => {
     if (!window.__POTATO_MODE) return;
-    
     if (e.code === 'Digit1' || e.code === 'Numpad1') {
       if (window.__POTATO_FORM === 1) return;
       window.__POTATO_FORM = 1; player.maxHp = 800; player.hp = Math.min(player.hp, player.maxHp);
@@ -490,7 +496,6 @@
       if (playerGroup) playerGroup.add(window.__potatoMesh);
       if (window.__MP && window.__MP.room) window.__MP.room.send('charState', { potatoForm: 1 });
     }
-    
     if (e.code === 'Digit2' || e.code === 'Numpad2') {
       if (window.__POTATO_FORM === 2) return;
       window.__POTATO_FORM = 2; player.maxHp = 600; player.hp = Math.min(player.hp, player.maxHp);
@@ -501,11 +506,10 @@
     }
   });
 
-  // ЛКМ и ПКМ
+  // 7. ЛКМ и ПКМ
   window.addEventListener('mousedown', e => {
     if (!window.__POTATO_MODE || player.isDead) return;
     const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
-    
     if (e.button === 0) {
       if (window.__potatoMesh) window.__potatoMesh.userData.attackAnim = 1;
       let dmg = (window.__POTATO_FORM === 1) ? 60 : 35;
@@ -522,7 +526,6 @@
         });
       }
     }
-    
     if (e.button === 2) {
       if (player.potatoQCd > 0) return;
       player.potatoQCd = (window.__POTATO_FORM === 1) ? 4 : 5;
@@ -537,7 +540,7 @@
     }
   });
 
-  // Анимации и кулдауны
+  // 8. Кулдауны и анимация
   setInterval(() => {
     if (window.__POTATO_MODE && window.__potatoMesh) {
       window.__potatoMesh.rotation.y = player.camYaw;
@@ -553,23 +556,20 @@
     if (player._potatoArmor > 0) player._potatoArmor -= 0.1;
   }, 100);
 
-  // Клавиши C, F, T
+  // 9. C, F, T
   window.addEventListener('keydown', e => {
     if (!window.__POTATO_MODE || player.isDead) return;
-    
     if (e.code === 'KeyC') {
       if (player.potatoCCd > 0) return; player.potatoCCd = 10;
       player.hp = Math.min(player.maxHp, player.hp + 250); player._potatoArmor = 4.0;
       if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'potato_heal' });
     }
-    
     if (e.code === 'KeyF') {
       if (player.potatoFCd > 0) return; player.potatoFCd = 6;
       const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
       player.vel.add(fwd.multiplyScalar(150));
       if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'potato_ram' });
     }
-    
     if (e.code === 'KeyT' && window.__POTATO_FORM === 2) {
       if (player.potatoTCd > 0) return; player.potatoTCd = 30;
       let bestE = null, bestD = 9999;
@@ -578,5 +578,5 @@
     }
   });
 
-  console.log("🍌 [PATCH v49] Готово. Кнопка добавлена в body. Проверь правый нижний угол.");
+  console.log("🍌 [PATCH v50] Готово. Жми F10 в меню ИЛИ ищи кнопку '🥔 МОРГЕНКАРТОШКА' рядом с Бананом.");
 })();
