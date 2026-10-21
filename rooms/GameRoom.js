@@ -42,7 +42,7 @@ const PVP_ABILITIES = {
   acid_rain: { radius: 7,  dmg: 30, cd: 800 }, repulse: { radius: 10, dmg: 60, cd: 1000 },
   fire_beam: { radius: 36, dmg: 100, cd: 2000 }, fire_fist: { radius: 7,  dmg: 45, cd: 400 },
   rocket: { radius: 10, dmg: 90, cd: 1500 }, kamikaze_spider: { radius: 10, dmg: 80, cd: 5000 },
-  freeze: { radius: 8,  dmg: 20, cd: 3000 },
+  freeze: { radius: 15,  dmg: 20, cd: 3000 },
   nano_ult: { radius: 50, dmg: 600, cd: 100000 } // ★ НОВАЯ УЛЬТА
 };
 
