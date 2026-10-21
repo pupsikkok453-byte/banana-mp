@@ -1,8 +1,8 @@
 // =======================================================
-// BANANA INDUSTRIES - GLOBAL PATCH (v32)
+// BANANA INDUSTRIES - GLOBAL PATCH (v33)
 // =======================================================
 (function() {
-  console.log("🍌 [PATCH] v32 — Гарпун: КД 0.6с, не тратится при промахе.");
+  console.log("🍌 [PATCH] v33 — Моргенкартошка + Фикс Т-способности Егора.");
 
   // ═══ 1. Убираем кусты ═══
   if (typeof addProp === 'function') {
@@ -249,7 +249,6 @@
     }
 
     if (bestEnemy && bestDist <= buildingDist) {
-      // ★ ПОПАДАНИЕ В ВРАГА → ставим КД
       _newVineCd = VINE_CD;
 
       const isElite = (bestEnemy.type === 'titan' || bestEnemy.type === 'tank' ||
@@ -300,7 +299,6 @@
         }, 450);
       }
     } else if (buildHits.length > 0) {
-      // ★ ПОПАДАНИЕ В ЗДАНИЕ → ставим КД
       _newVineCd = VINE_CD;
 
       const hp = buildHits[0].point;
@@ -318,13 +316,11 @@
       player.dodgeIframes = 0.5;
       postUniforms.uRadialBlur.value = 1.1;
     } else {
-      // ★ ПРОМАХ — КД НЕ СТАВИМ
       spawnComicPop(origin.clone().add(new THREE.Vector3(0, 2, 0)), '*НЕТ ЦЕЛИ*', '#888888');
       SoundFX.swing(300);
     }
   }, true);
 
-  // Тик КД гарпуна
   setInterval(() => { if (_newVineCd > 0) _newVineCd = Math.max(0, _newVineCd - 0.1); }, 100);
 
   // ═══ 9. C — Заморозка радиус 15м + локальный урон ═══
@@ -402,12 +398,11 @@
     if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'freeze', radius: FREEZE_RADIUS });
     if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,5,0)), `❄ ЗАМОРОЗКА (${targets.length})`, '#00f2fe');
     if (typeof SoundFX !== 'undefined') { SoundFX.devastator(); SoundFX.boom(); }
-    console.log('[FREEZE] Заморожено:', targets.length, '| радиус:', FREEZE_RADIUS);
   }, true);
 
   setInterval(() => { if (player.consumeCd > 0) player.consumeCd = Math.max(0, player.consumeCd - 0.1); }, 100);
 
-  // ═══ 10. T — Божественный синтез ═══
+  // ═══ 10. T — Божественный синтез (УСИЛЕН + КД 102.5с) ═══
   let tHoldTimer = 0, tCharging = false, nanoUltCd = 0;
   const tPanel = document.createElement('div');
   tPanel.style.cssText = 'position:fixed;bottom:180px;left:50%;transform:translateX(-50%);width:340px;background:rgba(0,20,40,.95);border:3px solid #00f2fe;border-radius:8px;padding:12px;text-align:center;z-index:50;display:none;box-shadow:0 0 30px rgba(0,242,254,.7),5px 5px 0 #000';
@@ -428,7 +423,9 @@
       tHoldTimer += 0.1;
       document.getElementById('t-bar').style.width = Math.min(100, (tHoldTimer / 5) * 100) + '%';
       if (tHoldTimer >= 5) {
-        tCharging = false; tPanel.style.display = 'none'; nanoUltCd = 100;
+        tCharging = false; tPanel.style.display = 'none'; 
+        nanoUltCd = 102.5; // ★ Увеличено на 2.5 секунды
+        
         const beam = new THREE.Mesh(new THREE.CylinderGeometry(2, 15, 40, 16), new THREE.MeshBasicMaterial({ color: 0x00f2fe, transparent: true, opacity: 0.7, wireframe: true }));
         beam.rotation.x = Math.PI / 2;
         const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
@@ -440,6 +437,7 @@
         ring.rotation.x = -Math.PI / 2; ring.position.copy(player.pos); scene.add(ring);
         let rt = 0;
         (function animRing() { rt += 0.05; ring.scale.setScalar(1 + rt * 3); ring.material.opacity = Math.max(0, 1 - rt); if (rt < 1) requestAnimationFrame(animRing); else { scene.remove(ring); ring.geometry.dispose(); ring.material.dispose(); } })();
+        
         if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'nano_ult', radius: 50 });
         if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,5,0)), '⚡ БОЖЕСТВЕННЫЙ СИНТЕЗ! ⚡', '#00f2fe');
         if (typeof SoundFX !== 'undefined') { SoundFX.devastator(); SoundFX.boom(); }
@@ -550,5 +548,108 @@
     };
   }
 
-  console.log("🍌 [PATCH v32] Готово. Гарпун: КД 0.6с, без траты при промахе.");
+  // ═══ 16. ★ МОРГЕНКАРТОШКА / ГРОМТОМАТ (Клавиша R для переключения) ═══
+  player.potatoForm = player.potatoForm || 1;
+  player.potatoSwitchCd = 0;
+  let potatoC_Cd = 0, potatoF_Cd = 0, potatoT_Cd = 0;
+
+  window.addEventListener('keydown', e => {
+    if (e.code === 'KeyR' && player.character === 'potato') {
+      if (player.potatoSwitchCd > 0) return;
+      player.potatoSwitchCd = 2.0; 
+      player.potatoForm = (player.potatoForm === 1) ? 2 : 1;
+      player.maxHp = (player.potatoForm === 1) ? 800 : 600;
+      player.hp = Math.min(player.hp, player.maxHp);
+      
+      if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), player.potatoForm === 1 ? 'ФОРМА: МОРГЕН' : 'ФОРМА: ГРОМТОМАТ', '#ffaa00');
+      if (window.__MP && window.__MP.room) window.__MP.room.send('charState', { potatoForm: player.potatoForm });
+    }
+  });
+  setInterval(() => { if (player.potatoSwitchCd > 0) player.potatoSwitchCd -= 0.1; }, 100);
+
+  window.addEventListener('keydown', e => {
+    if (player.character !== 'potato' || player.isDead) return;
+
+    if (e.code === 'KeyC') {
+      if (potatoC_Cd > 0) return;
+      if (player.potatoForm === 1) {
+        potatoC_Cd = 10;
+        player.hp = Math.min(player.maxHp, player.hp + 250);
+        player.rooted = 1.0; 
+        player._potatoArmor = 4.0; 
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ПИТАНИЕ КОРНЕЙ (+250 HP)', '#2ecc71');
+        if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'potato_heal' });
+      } else {
+        potatoC_Cd = 12;
+        player._tomatoRage = 6.0;
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ИСПЫТАНИЕ ПЛАМЕНЕМ (ЯРОСТЬ 6с)', '#ff4400');
+        if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'tomato_rage' });
+      }
+    }
+
+    if (e.code === 'KeyF') {
+      if (potatoF_Cd > 0) return;
+      if (player.potatoForm === 1) {
+        potatoF_Cd = 6;
+        if (typeof potatoRam === 'function') potatoRam();
+        else {
+            const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
+            player.vel.add(fwd.multiplyScalar(150));
+            if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'potato_ram', radius: 10 });
+        }
+      } else {
+        potatoF_Cd = 3;
+        if (typeof tomatoSauce === 'function') tomatoSauce();
+        else {
+            if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'tomato_sauce', radius: 15 });
+        }
+      }
+    }
+
+    if (e.code === 'KeyT' && player.potatoForm === 2) {
+      if (potatoT_Cd > 0) return;
+      potatoT_Cd = 30;
+      
+      let bestEnemy = null, bestDist = 9999;
+      for(let i=0; i<enemies.length; i++) {
+          let d = player.pos.distanceTo(enemies[i].group.position);
+          if(d < bestDist) { bestDist = d; bestEnemy = enemies[i]; }
+      }
+      
+      if (bestEnemy) {
+        player.pos.copy(bestEnemy.group.position).add(new THREE.Vector3(0, 0, 3));
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ТОМАТНЫЙ ПОРТАЛ!', '#ff0055');
+        if (typeof SoundFX !== 'undefined') SoundFX.teleport();
+      } else {
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'НЕТ ЦЕЛЕЙ!', '#888888');
+        potatoT_Cd = 0; 
+      }
+    }
+
+    if (e.code === 'KeyQ') {
+        if (player.potatoForm === 1) {
+            if (typeof potatoSlam === 'function') potatoSlam();
+            else if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'potato_slam', radius: 12 });
+        } else {
+            if (typeof tomatoNova === 'function') tomatoNova();
+            else if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'tomato_nova', radius: 12 });
+        }
+    }
+  });
+
+  setInterval(() => { 
+    if (potatoC_Cd > 0) potatoC_Cd -= 0.1; 
+    if (potatoF_Cd > 0) potatoF_Cd -= 0.1; 
+    if (potatoT_Cd > 0) potatoT_Cd -= 0.1; 
+  }, 100);
+
+  const origDamageHeroPotato = window.applyDamageToHero;
+  window.applyDamageToHero = function(dmg) {
+    if (player.character === 'potato' && player.potatoForm === 1 && player._potatoArmor > 0) {
+      dmg = Math.floor(dmg * 0.5); 
+    }
+    if (origDamageHeroPotato) return origDamageHeroPotato.apply(this, arguments);
+  };
+
+  console.log("🍌 [PATCH v33] Готово.");
 })();
