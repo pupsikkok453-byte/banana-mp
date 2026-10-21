@@ -1,14 +1,14 @@
 // =======================================================
-// BANANA INDUSTRIES - GLOBAL PATCH (v25)
+// BANANA INDUSTRIES - GLOBAL PATCH (v26)
+// Полностью рабочие способности и заморозка
 // =======================================================
 (function() {
   console.log("🍌 [PATCH] Применение финального патча...");
 
   // 1. ДЕНЬ И НОЧЬ + СОЛНЦЕ/ЛУНА
   if (typeof TimeOfDay !== 'undefined') {
-    TimeOfDay.speed = 1 / 90; // 1.5 минуты на цикл
+    TimeOfDay.speed = 1 / 90;
   }
-  // Скрываем скайбокс (иначе смена фона не видна)
   setTimeout(() => {
     scene.traverse((o) => {
       if (o.geometry && o.geometry.type === 'SphereGeometry') {
@@ -16,7 +16,6 @@
         if (p && p.radius >= 4000) o.visible = false;
       }
     });
-    // Солнце/Луна
     const sunMoon = new THREE.Mesh(
       new THREE.SphereGeometry(100, 16, 16),
       new THREE.MeshBasicMaterial({ color: 0xffffff })
@@ -80,7 +79,7 @@
     };
   }
 
-  // 4. МЕНЮ (Esc) + ДРОН (B) — ПЕРСИСТЕНТНЫЙ
+  // 4. МЕНЮ (Esc) + ДРОН (B)
   window.addEventListener('keydown', e => {
     if (e.code === 'Escape' && typeof gameStarted !== 'undefined' && gameStarted) {
       document.getElementById('start-screen').style.display = 'flex';
@@ -105,7 +104,7 @@
     }
   });
 
-  // Хук Companion.update: не дает перезаписать disabled
+  // Хук Companion.update
   if (typeof Companion !== 'undefined') {
     const origUpdate = Companion.update;
     Companion.update = function(dt, now) {
@@ -117,7 +116,6 @@
       }
     };
 
-    // ШРЕКИЧ АТАКУЕТ ИГРОКОВ (урон 5)
     const origFind = Companion.findNearestEnemy;
     Companion.findNearestEnemy = function(maxD) {
       let best = null, bd = maxD;
@@ -153,7 +151,30 @@
     };
   }
 
-  // 5. F-СПОСОБНОСТИ: КД У КАЖДОГО КОСТЮМА ОТДЕЛЬНО
+  // 5. ПЕРЕХВАТ updateEnemiesAndVehicles ДЛЯ ОСТАНОВКИ ЗАМОРОЖЕННЫХ
+  if (typeof updateEnemiesAndVehicles === 'function') {
+    const _origUpdateEnemies = window.updateEnemiesAndVehicles;
+    window.updateEnemiesAndVehicles = function(dt, now) {
+      const frozenPos = new Map();
+      for (let i = 0; i < enemies.length; i++) {
+        const en = enemies[i];
+        if (en.frozen > 0) {
+          en.frozen -= dt;
+          en.vel.x = 0; en.vel.z = 0;
+          en._mpMoving = false;
+          frozenPos.set(en, en.group.position.clone());
+        }
+      }
+      
+      _origUpdateEnemies.apply(this, arguments);
+      
+      for (let [en, pos] of frozenPos) {
+        en.group.position.copy(pos);
+      }
+    };
+  }
+
+  // 6. F-СПОСОБНОСТИ (КД У КАЖДОГО КОСТЮМА ОТДЕЛЬНО)
   player._suitCdMap = player._suitCdMap || [0,0,0,0,0];
   const origTriggerF = window.triggerUniqueAbilityF;
   window.triggerUniqueAbilityF = function() {
@@ -223,7 +244,6 @@
     if (origTriggerF) origTriggerF.apply(this, arguments);
   };
 
-  // Тик CD для F
   setInterval(() => {
     if (player._suitCdMap) {
       for (let i = 0; i < 5; i++) {
@@ -232,55 +252,69 @@
     }
   }, 100);
 
-  // 6. ЗАМЕНА ПОГЛОЩЕНИЯ (C) НА ЗАМОРОЗКУ (с визуалом)
+  // 7. ЗАМЕНА ПОГЛОЩЕНИЯ (C) НА ЗАМОРОЗКУ (РАБОТАЕТ ВСЕГДА)
   const origConsume = window.performConsume;
   window.performConsume = function() {
     if (player.character === 'banana' && player.suitIdx === 4) {
+      if (player.consumeCd > 0) {
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), `*C КД ${player.consumeCd.toFixed(1)}с*`, '#00ff66');
+        return;
+      }
+      player.consumeCd = 8.0;
+
+      // Визуал на себе
+      const iceMe = new THREE.Mesh(
+        new THREE.BoxGeometry(3.5, 4.5, 3.5),
+        new THREE.MeshBasicMaterial({color: 0x00f2fe, transparent: true, opacity: 0.5, wireframe: true})
+      );
+      iceMe.position.set(player.pos.x, player.pos.y + 2, player.pos.z);
+      scene.add(iceMe);
+      setTimeout(() => { scene.remove(iceMe); iceMe.geometry.dispose(); iceMe.material.dispose(); }, 2000);
+
+      // Отправка на сервер (если в MP)
       if (window.__MP && window.__MP.room) {
         window.__MP.room.send('pvp_ability', { type: 'freeze', radius: 8 });
-        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ЗАМОРОЗКА!', '#00f2fe');
-        // Визуал вокруг себя
-        const ice = new THREE.Mesh(
-          new THREE.BoxGeometry(3.5, 4.5, 3.5),
-          new THREE.MeshBasicMaterial({color: 0x00f2fe, transparent: true, opacity: 0.5, wireframe: true})
-        );
-        ice.position.set(player.pos.x, player.pos.y + 2, player.pos.z);
-        scene.add(ice);
-        setTimeout(() => { scene.remove(ice); ice.geometry.dispose(); ice.material.dispose(); }, 2000);
-        // Визуал на врагах и игроках
-        if (typeof enemies !== 'undefined') {
-          enemies.forEach(en => {
-            if (en.group.position.distanceTo(player.pos) < 8) {
-              const cube = new THREE.Mesh(
-                new THREE.BoxGeometry(3, 4, 3),
-                new THREE.MeshBasicMaterial({color: 0x00f2fe, transparent: true, opacity: 0.6, wireframe: true})
-              );
-              cube.position.copy(en.group.position).add(new THREE.Vector3(0, 2, 0));
-              scene.add(cube);
-              setTimeout(() => { scene.remove(cube); cube.geometry.dispose(); cube.material.dispose(); }, 2000);
-            }
-          });
-        }
-        if (window.__MP && window.__MP.remotes) {
-          window.__MP.remotes.forEach(r => {
-            if (r.group.position.distanceTo(player.pos) < 8) {
-              const cube = new THREE.Mesh(
-                new THREE.BoxGeometry(3, 4, 3),
-                new THREE.MeshBasicMaterial({color: 0x00f2fe, transparent: true, opacity: 0.6, wireframe: true})
-              );
-              cube.position.copy(r.group.position).add(new THREE.Vector3(0, 2, 0));
-              scene.add(cube);
-              setTimeout(() => { scene.remove(cube); cube.geometry.dispose(); cube.material.dispose(); }, 2000);
-            }
-          });
+      }
+
+      // Визуал на врагах + локальная заморозка
+      for (let i = 0; i < enemies.length; i++) {
+        const en = enemies[i];
+        if (en.group.position.distanceTo(player.pos) < 8) {
+          en.frozen = 2.0;
+          en._mpMoving = false;
+          const cube = new THREE.Mesh(
+            new THREE.BoxGeometry(3, 4, 3),
+            new THREE.MeshBasicMaterial({color: 0x00f2fe, transparent: true, opacity: 0.6, wireframe: true})
+          );
+          cube.position.copy(en.group.position).add(new THREE.Vector3(0, 2, 0));
+          scene.add(cube);
+          setTimeout(() => { scene.remove(cube); cube.geometry.dispose(); cube.material.dispose(); }, 2000);
         }
       }
+
+      // Визуал на других игроках
+      if (window.__MP && window.__MP.remotes) {
+        window.__MP.remotes.forEach(r => {
+          if (r.group.position.distanceTo(player.pos) < 8) {
+            const cube = new THREE.Mesh(
+              new THREE.BoxGeometry(3, 4, 3),
+              new THREE.MeshBasicMaterial({color: 0x00f2fe, transparent: true, opacity: 0.6, wireframe: true})
+            );
+            cube.position.copy(r.group.position).add(new THREE.Vector3(0, 2, 0));
+            scene.add(cube);
+            setTimeout(() => { scene.remove(cube); cube.geometry.dispose(); cube.material.dispose(); }, 2000);
+          }
+        });
+      }
+
+      if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,4,0)), 'ЗАМОРОЗКА!', '#00f2fe');
+      if (typeof SoundFX !== 'undefined') SoundFX.devastator();
       return;
     }
     if (origConsume) origConsume.apply(this, arguments);
   };
 
-  // 7. ТАНКИ БОЛЬШЕ
+  // 8. ТАНКИ БОЛЬШЕ
   if (typeof spawnCitrusAPC === 'function') {
     const _origAPC = spawnCitrusAPC;
     window.spawnCitrusAPC = function(x, z) {
@@ -290,7 +324,7 @@
     };
   }
 
-  // 8. ОПУТЫВАНИЕ СБИВАЕТ ЛЕТАЮЩИХ
+  // 9. ОПУТЫВАНИЕ СБИВАЕТ ЛЕТАЮЩИХ
   const origRootBind = window.carrotRootBind;
   window.carrotRootBind = function() {
     if (origRootBind) origRootBind.apply(this, arguments);
@@ -303,7 +337,7 @@
     }
   };
 
-  // 9. РАЗНОЕ HP ДЛЯ ФОРМ МОРКОВИ
+  // 10. РАЗНОЕ HP ДЛЯ ФОРМ МОРКОВИ
   const origToggleCarrot = window.toggleCarrotForm;
   window.toggleCarrotForm = function() {
     if (origToggleCarrot) origToggleCarrot.apply(this, arguments);
@@ -314,7 +348,7 @@
     }
   };
 
-  // 10. ЯРОСТЬ ПЕРЕЦА
+  // 11. ЯРОСТЬ ПЕРЕЦА
   if (typeof addRage === 'function') {
     const origAddRage = window.addRage;
     window.addRage = function(amount) {
@@ -323,7 +357,7 @@
     };
   }
 
-  // 11. СООБЩЕНИЕ КАМИКАДЗЕ (визуал + звук)
+  // 12. КАМИКАДЗЕ (ВИЗУАЛ)
   setTimeout(() => {
     if (window.__MP && window.__MP.room && !window.__MP.room._kamikazeHooked) {
       window.__MP.room._kamikazeHooked = true;
@@ -343,5 +377,5 @@
     }
   }, 3000);
 
-  console.log("🍌 [PATCH] Все системы готовы к бою! Заморозка, F-CD, Шрекич, День/Ночь.");
+  console.log("🍌 [PATCH] Готово! Заморозка теперь работает всегда.");
 })();
