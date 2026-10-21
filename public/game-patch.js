@@ -1,11 +1,19 @@
 // =======================================================
-// BANANA INDUSTRIES - GLOBAL PATCH (v27)
-// Жёсткий перехват C (Заморозка) + Усиленный Щит
+// BANANA INDUSTRIES - GLOBAL PATCH (v29 — Full)
 // =======================================================
 (function() {
-  console.log("🍌 [PATCH] Применение финального патча v27...");
+  console.log("🍌 [PATCH] v29 — Полный патч игры.");
 
-  // 1. ДЕНЬ И НОЧЬ
+  // 1. Убираем кусты
+  if (typeof addProp === 'function') {
+    const _origAddProp = window.addProp;
+    window.addProp = function(x, z, type) {
+      if (type === 'bush') return;
+      _origAddProp.apply(this, arguments);
+    };
+  }
+
+  // 2. День и Ночь
   if (typeof TimeOfDay !== 'undefined') TimeOfDay.speed = 1 / 90;
   setTimeout(() => {
     scene.traverse((o) => {
@@ -27,7 +35,7 @@
     }, 100);
   }, 1000);
 
-  // 2. ЛАНДШАФТ
+  // 3. Ландшафт
   setTimeout(() => {
     if (typeof scene !== 'undefined' && typeof createPrototypeShader === 'function') {
       const hillMat = createPrototypeShader(0x3a5a2a, 0x1a2a0a, 8, 0x88cc44);
@@ -38,29 +46,27 @@
         const r = 25 + Math.random() * 35;
         const h = 8 + Math.random() * 15;
         const hill = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6, 0, Math.PI*2, 0, Math.PI/2), hillMat);
-        hill.position.set(x, 0, z);
-        hill.scale.y = h / r;
-        scene.add(hill);
+        hill.position.set(x, 0, z); hill.scale.y = h / r; scene.add(hill);
       }
     }
   }, 1500);
 
-  // 3. ХУК ОБНОВЛЕНИЯ ИГРОКА (Заморозка + Idle + Щит пассив)
+  // 4. Хук обновления игрока (Морковь, Idle, Щит)
   if (typeof updatePlayerChoreographyAndCamera === 'function') {
     const _origChoreo = updatePlayerChoreographyAndCamera;
     window.updatePlayerChoreographyAndCamera = function(dt, now) {
       const isFrozen = window.__MP && window.__MP._myRootedUntil > now;
       const savedX = player.pos.x, savedZ = player.pos.z;
-      
       _origChoreo.apply(this, arguments);
       
-      if (isFrozen) {
-        player.pos.x = savedX;
-        player.pos.z = savedZ;
-        player.vel.x = 0; player.vel.z = 0;
-        playerGroup.position.copy(player.pos);
+      if (isFrozen) { player.pos.x = savedX; player.pos.z = savedZ; player.vel.x = 0; player.vel.z = 0; playerGroup.position.copy(player.pos); }
+      if (player.pos.y < 0) player.pos.y = 0;
+
+      if (player.activeModeF && player.suitIdx === 3 && player.character === 'banana' && !PEPPER_MODE && !CARROT_MODE) {
+        player.en -= 15 * dt;
+        if (player.en <= 0) { player.en = 0; player.activeModeF = false; if (player.mesh && player.mesh.userData.limeShield) player.mesh.userData.limeShield.visible = false; }
       }
-      
+
       if (!player.isDead && player.attackTimer <= 0 && !player.isFlying && !player.isDodging && !player.isSliding && !player.isWallRunning && !isFrozen) {
         const ud = player.mesh ? player.mesh.userData : null;
         if (ud && ud.spine) {
@@ -70,39 +76,27 @@
           if (ud.armR && ud.armR.shoulder) ud.armR.shoulder.rotation.x = Math.sin(now * 0.002 + 1.5) * 0.1;
         }
       }
-
-      // Улучшенный щит (пассив)
-      if (player.activeModeF && player.suitIdx === 3 && player.character === 'banana' && !PEPPER_MODE && !CARROT_MODE) {
-        player.en -= 15 * dt; // Было 30
-        if (player.en <= 0) {
-          player.en = 0;
-          player.activeModeF = false;
-          if (player.mesh && player.mesh.userData.limeShield) player.mesh.userData.limeShield.visible = false;
-          if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3.2,0)), '*ЩИТ ПАЛ*', '#ff2200');
-        }
-      }
     };
   }
 
-  // 4. УЛУЧШЕННЫЙ ЩИТ (поглощение урона)
+  // 5. Улучшенный щит (1.5x поглощение)
   const origDamageToHero = window.applyDamageToHero;
   window.applyDamageToHero = function(dmg) {
     if (player.activeModeF && player.suitIdx === 3 && player.character === 'banana' && !PEPPER_MODE && !CARROT_MODE) {
-      const drain = dmg * 1.5; // Было 3.0
+      const drain = dmg * 1.5;
       if (player.en >= drain) {
         player.en -= drain;
-        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3.2,0)), '*ЩИТ -'+Math.round(drain)+'EN*','#00f2fe');
-        return; // Блокируем урон
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3.2,0)), '*ЩИТ БЛОК*','#00f2fe');
+        return;
       } else {
         player.activeModeF = false;
         if (player.mesh && player.mesh.userData.limeShield) player.mesh.userData.limeShield.visible = false;
-        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3.2,0)), '*ЩИТ РАЗБИТ!*','#ff2200');
       }
     }
     if (origDamageToHero) return origDamageToHero.apply(this, arguments);
   };
 
-  // 5. МЕНЮ (Esc) + ДРОН (B)
+  // 6. Меню (Esc) + Дрон (B)
   window.addEventListener('keydown', e => {
     if (e.code === 'Escape' && typeof gameStarted !== 'undefined' && gameStarted) {
       document.getElementById('start-screen').style.display = 'flex';
@@ -163,102 +157,117 @@
     };
   }
 
-  // 6. ЖЁСТКИЙ ПЕРЕХВАТ C (ЗАМОРОЗКА) ЧЕРЕЗ CAPTURE-ФАЗУ
+  // 7. ЖЁСТКИЙ ПЕРЕХВАТ C (ЗАМОРОЗКА 3 СЕК)
   window.addEventListener('keydown', function(e) {
     if (e.code !== 'KeyC') return;
     if (typeof player === 'undefined' || player.isDead) return;
     if (player.character !== 'banana' || player.suitIdx !== 4) return;
     if (typeof CARROT_MODE !== 'undefined' && CARROT_MODE) return;
 
-    // Блокируем стандартное поглощение
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
 
-    // КД
     if (player.consumeCd > 0) {
       if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), `*C КД ${player.consumeCd.toFixed(1)}с*`, '#00ff66');
       return;
     }
     player.consumeCd = 8.0;
 
-    // Собираем цели в радиусе 8м
     const targets = [];
-    for (let i = 0; i < enemies.length; i++) {
-      if (enemies[i].group.position.distanceTo(player.pos) < 8) targets.push({ type: 'enemy', obj: enemies[i] });
-    }
+    for (let i = 0; i < enemies.length; i++) if (enemies[i].group.position.distanceTo(player.pos) < 8) targets.push(enemies[i]);
     if (window.__MP && window.__MP.remotes) {
-      window.__MP.remotes.forEach((r, id) => {
-        if (r.group.position.distanceTo(player.pos) < 8) targets.push({ type: 'remote', obj: r });
-      });
+      window.__MP.remotes.forEach((r, id) => { if (r.group.position.distanceTo(player.pos) < 8) targets.push({ isRemote: true, id: id, group: r.group }); });
     }
 
-    // Визуал вокруг игрока
-    const iceMe = new THREE.Mesh(
-      new THREE.BoxGeometry(3.5, 4.5, 3.5),
-      new THREE.MeshBasicMaterial({ color: 0x00f2fe, transparent: true, opacity: 0.5, wireframe: true })
-    );
-    iceMe.position.set(player.pos.x, player.pos.y + 2, player.pos.z);
-    scene.add(iceMe);
-    setTimeout(() => { scene.remove(iceMe); iceMe.geometry.dispose(); iceMe.material.dispose(); }, 2000);
+    // Визуал на себе
+    for (let i = 0; i < 3; i++) {
+      const iceMe = new THREE.Mesh(new THREE.BoxGeometry(3.5 - i*0.8, 4.5 - i*0.8, 3.5 - i*0.8), new THREE.MeshBasicMaterial({ color: 0x00f2fe, transparent: true, opacity: 0.35 + i*0.15, wireframe: true }));
+      iceMe.position.set(player.pos.x, player.pos.y + 2, player.pos.z); scene.add(iceMe);
+      setTimeout(() => { scene.remove(iceMe); iceMe.geometry.dispose(); iceMe.material.dispose(); }, 3000);
+    }
+    if (typeof spawnParticles === 'function') spawnParticles(player.pos.clone().add(new THREE.Vector3(0,1,0)), 0x00f2fe, 20);
 
-    // Применяем эффект к каждой цели
     for (const t of targets) {
-      const pos = t.obj.group ? t.obj.group.position : t.obj.position;
-      const cube = new THREE.Mesh(
-        new THREE.BoxGeometry(3, 4, 3),
-        new THREE.MeshBasicMaterial({ color: 0x00f2fe, transparent: true, opacity: 0.7, wireframe: true })
-      );
-      cube.position.copy(pos).add(new THREE.Vector3(0, 2, 0));
-      scene.add(cube);
-      setTimeout(() => { scene.remove(cube); cube.geometry.dispose(); cube.material.dispose(); }, 2000);
+      const pos = t.group ? t.group.position : t.position;
+      for (let i = 0; i < 3; i++) {
+        const cube = new THREE.Mesh(new THREE.BoxGeometry(3 - i*0.8, 4 - i*0.8, 3 - i*0.8), new THREE.MeshBasicMaterial({ color: 0x00f2fe, transparent: true, opacity: 0.5 + i*0.15, wireframe: true }));
+        cube.position.copy(pos).add(new THREE.Vector3(0, 2, 0)); scene.add(cube);
+        setTimeout(() => { scene.remove(cube); cube.geometry.dispose(); cube.material.dispose(); }, 3000);
+      }
+      if (typeof spawnParticles === 'function') spawnParticles(pos.clone().add(new THREE.Vector3(0,1,0)), 0x00f2fe, 10);
 
-      if (t.type === 'enemy') {
-        t.obj.frozen = 2.0;
-        t.obj._mpMoving = false;
-        t.obj.vel.x = 0; t.obj.vel.z = 0;
+      if (!t.isRemote) { t.frozen = 3.0; t._mpMoving = false; t.vel.x = 0; t.vel.z = 0; }
+    }
+
+    if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'freeze', radius: 8 });
+    if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,4,0)), `❄ ЗАМОРОЗКА (${targets.length})`, '#00f2fe');
+    if (typeof SoundFX !== 'undefined') SoundFX.devastator();
+  }, true);
+
+  setInterval(() => { if (player.consumeCd > 0) player.consumeCd = Math.max(0, player.consumeCd - 0.1); }, 100);
+
+  // 8. Т-УЛЬТА (БОЖЕСТВЕННЫЙ СИНТЕЗ)
+  let tHoldTimer = 0, tCharging = false, nanoUltCd = 0;
+  const tPanel = document.createElement('div');
+  tPanel.style.cssText = 'position:fixed;bottom:180px;left:50%;transform:translateX(-50%);width:340px;background:rgba(0,20,40,.95);border:3px solid #00f2fe;border-radius:8px;padding:12px;text-align:center;z-index:50;display:none;box-shadow:0 0 30px rgba(0,242,254,.7),5px 5px 0 #000';
+  tPanel.innerHTML = '<div style="font-family:Bangers,Impact,sans-serif;font-size:20px;color:#00f2fe;-webkit-text-stroke:1px #000;margin-bottom:6px;letter-spacing:2px">⚡ БОЖЕСТВЕННЫЙ СИНТЕЗ ⚡</div><div style="height:22px;background:#001a1a;border:2px solid #000;overflow:hidden"><div id="t-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#00f2fe,#ff0055);box-shadow:0 0 15px #00f2fe;transition:width .05s"></div></div>';
+  document.body.appendChild(tPanel);
+
+  window.addEventListener('keydown', e => {
+    if (e.code === 'KeyT' && player.character === 'banana' && player.suitIdx === 4) {
+      if (nanoUltCd > 0) {
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), `*T КД ${Math.ceil(nanoUltCd)}с*`, '#ff4400');
+        return;
+      }
+      if (!tCharging) { tCharging = true; tHoldTimer = 0; tPanel.style.display = 'block'; }
+    }
+  });
+
+  window.addEventListener('keyup', e => {
+    if (e.code === 'KeyT' && tCharging) { tCharging = false; tPanel.style.display = 'none'; }
+  });
+
+  setInterval(() => {
+    if (nanoUltCd > 0) nanoUltCd -= 0.1;
+    if (tCharging) {
+      tHoldTimer += 0.1;
+      document.getElementById('t-bar').style.width = Math.min(100, (tHoldTimer / 5) * 100) + '%';
+      if (tHoldTimer >= 5) {
+        tCharging = false; tPanel.style.display = 'none'; nanoUltCd = 100;
+
+        const beam = new THREE.Mesh(new THREE.CylinderGeometry(2, 15, 40, 16), new THREE.MeshBasicMaterial({color: 0x00f2fe, transparent: true, opacity: 0.7, wireframe: true}));
+        beam.rotation.x = Math.PI / 2;
+        const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
+        beam.position.copy(player.pos).add(fwd.clone().multiplyScalar(20));
+        beam.lookAt(player.pos.clone().add(fwd.clone().multiplyScalar(40)));
+        scene.add(beam);
+        setTimeout(() => { scene.remove(beam); beam.geometry.dispose(); beam.material.dispose(); }, 1500);
+
+        const ring = new THREE.Mesh(new THREE.RingGeometry(1, 50, 32), new THREE.MeshBasicMaterial({color: 0x00f2fe, side: THREE.DoubleSide}));
+        ring.rotation.x = -Math.PI / 2; ring.position.copy(player.pos); scene.add(ring);
+        let rt = 0; (function animRing() { rt += 0.05; ring.scale.setScalar(1 + rt * 3); ring.material.opacity = Math.max(0, 1 - rt); if (rt < 1) requestAnimationFrame(animRing); else { scene.remove(ring); ring.geometry.dispose(); ring.material.dispose(); } })();
+
+        if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'nano_ult', radius: 50 });
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,5,0)), '⚡ БОЖЕСТВЕННЫЙ СИНТЕЗ! ⚡', '#00f2fe');
+        if (typeof SoundFX !== 'undefined') { SoundFX.devastator(); SoundFX.boom(); }
       }
     }
-
-    // Серверу
-    if (window.__MP && window.__MP.room) {
-      window.__MP.room.send('pvp_ability', { type: 'freeze', radius: 8 });
-    }
-
-    if (typeof spawnComicPop === 'function') {
-      if (targets.length === 0) spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,4,0)), 'НЕТ ЦЕЛЕЙ', '#888888');
-      else spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,4,0)), `❄ ЗАМОРОЗКА (${targets.length})`, '#00f2fe');
-    }
-    if (typeof SoundFX !== 'undefined') SoundFX.devastator();
-
-    console.log('[FREEZE] Заморожено целей:', targets.length);
-  }, true); // capture phase
-
-  // Отдельный тик для КД (чтобы не сбрасывался)
-  setInterval(() => {
-    if (player.consumeCd > 0) player.consumeCd = Math.max(0, player.consumeCd - 0.1);
   }, 100);
 
-  // 7. ОСТАНОВКА ЗАМОРОЖЕННЫХ ВРАГОВ
+  // 9. ОСТАНОВКА ЗАМОРОЖЕННЫХ
   if (typeof updateEnemiesAndVehicles === 'function') {
     const _origUpdateEnemies = window.updateEnemiesAndVehicles;
     window.updateEnemiesAndVehicles = function(dt, now) {
       const frozenPos = new Map();
       for (let i = 0; i < enemies.length; i++) {
         const en = enemies[i];
-        if (en.frozen > 0) {
-          en.frozen -= dt;
-          en.vel.x = 0; en.vel.z = 0;
-          en._mpMoving = false;
-          frozenPos.set(en, en.group.position.clone());
-        }
+        if (en.frozen > 0) { en.frozen -= dt; en.vel.x = 0; en.vel.z = 0; en._mpMoving = false; frozenPos.set(en, en.group.position.clone()); }
       }
       _origUpdateEnemies.apply(this, arguments);
       for (let [en, pos] of frozenPos) en.group.position.copy(pos);
     };
   }
 
-  // 8. F-СПОСОБНОСТИ (КД У КАЖДОГО КОСТЮМА)
+  // 10. F-СПОСОБНОСТИ (КД на каждый костюм)
   player._suitCdMap = player._suitCdMap || [0,0,0,0,0];
   const origTriggerF = window.triggerUniqueAbilityF;
   window.triggerUniqueAbilityF = function() {
@@ -280,7 +289,7 @@
   };
   setInterval(() => { if (player._suitCdMap) for (let i = 0; i < 5; i++) if (player._suitCdMap[i] > 0) player._suitCdMap[i] -= 0.1; }, 100);
 
-  // 9. ТАНКИ БОЛЬШЕ
+  // 11. Танки больше
   if (typeof spawnCitrusAPC === 'function') {
     const _origAPC = spawnCitrusAPC;
     window.spawnCitrusAPC = function(x, z) {
@@ -290,31 +299,24 @@
     };
   }
 
-  // 10. ОПУТЫВАНИЕ СБИВАЕТ ЛЕТАЮЩИХ
+  // 12. Опутывание сбивает летающих
   const origRootBind = window.carrotRootBind;
   window.carrotRootBind = function() {
     if (origRootBind) origRootBind.apply(this, arguments);
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
-      if (e.flying && e.group.position.distanceTo(player.pos) < 25) {
-        e.flying = false; e.group.position.y = 0; e.vel.y = 0;
-        if (typeof spawnComicPop === 'function') spawnComicPop(e.group.position.clone().add(new THREE.Vector3(0,2,0)), 'СБИТ!', '#2ecc71');
-      }
+      if (e.flying && e.group.position.distanceTo(player.pos) < 25) { e.flying = false; e.group.position.y = 0; e.vel.y = 0; if (typeof spawnComicPop === 'function') spawnComicPop(e.group.position.clone().add(new THREE.Vector3(0,2,0)), 'СБИТ!', '#2ecc71'); }
     }
   };
 
-  // 11. HP ФОРМ МОРКОВИ
+  // 13. HP форм Моркови
   const origToggleCarrot = window.toggleCarrotForm;
   window.toggleCarrotForm = function() {
     if (origToggleCarrot) origToggleCarrot.apply(this, arguments);
-    if (player.character === 'carrot') {
-      player.maxHp = (CARROT_FORM === 2) ? 800 : 480;
-      player.hp = player.maxHp;
-      if (typeof updateHUD === 'function') updateHUD();
-    }
+    if (player.character === 'carrot') { player.maxHp = (CARROT_FORM === 2) ? 800 : 480; player.hp = player.maxHp; if (typeof updateHUD === 'function') updateHUD(); }
   };
 
-  // 12. ЯРОСТЬ ПЕРЕЦА
+  // 14. Ярость Перца
   if (typeof addRage === 'function') {
     const origAddRage = window.addRage;
     window.addRage = function(amount) {
@@ -323,5 +325,5 @@
     };
   }
 
-  console.log("🍌 [PATCH v27] Готово. Заморозка через capture-phase, щит усилен.");
+  console.log("🍌 [PATCH v29] Готово: Ульта T, Заморозка 3с, Кусты убраны, Морковь починена, Таблица работает.");
 })();
