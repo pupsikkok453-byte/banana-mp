@@ -1,9 +1,9 @@
 // =======================================================
-// BANANA INDUSTRIES - GLOBAL PATCH (v39)
-// ПОЛНАЯ ВЕРСИЯ: Все старые фиксы + Моргенкартошка (Клавиши 1 и 2)
+// BANANA INDUSTRIES - GLOBAL PATCH (v42)
+// ПОЛНАЯ ВЕРСИЯ (Все старые фиксы + Моргенкартошка как отдельный класс)
 // =======================================================
 (function() {
-  console.log("🍌 [PATCH] v39 — Загружен полный патч. Клавиши 1 (Морген) и 2 (Громтомат).");
+  console.log("🍌 [PATCH] v42 — Загружена полная версия. Все фиксы на месте. Картошка отдельная.");
 
   // ═══ 1. Убираем кусты ═══
   if (typeof addProp === 'function') {
@@ -160,9 +160,12 @@
     };
   }
 
-  // ═══ 6. Усиленный щит ═══
+  // ═══ 6. Усиленный щит / Броня ═══
   const origDamageToHero = window.applyDamageToHero;
   window.applyDamageToHero = function(dmg) {
+    if (player.character === 'potato' && player.potatoForm === 1 && player._potatoArmor > 0) {
+      dmg = Math.floor(dmg * 0.5); 
+    }
     if (player.activeModeF && player.suitIdx === 3 && player.character === 'banana' && !PEPPER_MODE && !CARROT_MODE && !LEMON_MODE) {
       const drain = dmg * 1.5;
       if (player.en >= drain) {
@@ -183,7 +186,7 @@
       document.getElementById('start-screen').style.display = 'flex';
       try { document.exitPointerLock(); } catch(err) {}
     }
-    if (e.code === 'KeyB' && typeof player !== 'undefined' && player.character === 'banana') {
+    if (e.code === 'KeyB' && typeof player !== 'undefined' && player.character === 'banana' && !PEPPER_MODE && !CARROT_MODE && !LEMON_MODE) {
       if (typeof Companion !== 'undefined') {
         Companion._disabled = !Companion._disabled;
         if (Companion._disabled) {
@@ -208,7 +211,8 @@
     const origUpdate = Companion.update;
     Companion.update = function(dt, now) {
       origUpdate.call(this, dt, now);
-      if (this._disabled && this.group) { 
+      // ★ Блокировка дрона для Картошки
+      if ((this._disabled || (typeof player !== 'undefined' && player.character === 'potato')) && this.group) { 
         this.group.visible = false; 
         this.shootCd = 99999; 
         this.buffCd = 99999; 
@@ -234,6 +238,7 @@
     };
     const origShoot = Companion.shootAt;
     Companion.shootAt = function(e) {
+      if (typeof player !== 'undefined' && player.character === 'potato') return; // Блок
       if (e.isPlayer) {
         if (window.__MP && window.__MP.room) window.__MP.room.send('pvp', { targetId: e.id, damage: 5 });
         if (typeof SoundFX !== 'undefined') SoundFX.whip();
@@ -504,6 +509,7 @@
   player._suitCdMap = player._suitCdMap || [0,0,0,0,0];
   const origTriggerF = window.triggerUniqueAbilityF;
   window.triggerUniqueAbilityF = function() {
+    if (player.character === 'potato') return; // Для картошки отдельная логика
     const idx = player.suitIdx;
 
     if (CARROT_MODE) {
@@ -603,13 +609,7 @@
     var armR = new THREE.Group(), armR_shoulder = new THREE.Group(); armR.add(armR_shoulder); g.add(armR);
     var armL = new THREE.Group(), armL_shoulder = new THREE.Group(); armL.add(armL_shoulder); g.add(armL);
     
-    g.userData = { 
-        legL: { pivot: legL, hip: legL_hip, knee: legL_knee }, 
-        legR: { pivot: legR, hip: legR_hip, knee: legR_knee }, 
-        armR: { pivot: armR, shoulder: armR_shoulder }, 
-        armL: { pivot: armL, shoulder: armL_shoulder }, 
-        spine: spine 
-    };
+    g.userData = { legL: { pivot: legL, hip: legL_hip, knee: legL_knee }, legR: { pivot: legR, hip: legR_hip, knee: legR_knee }, armR: { pivot: armR, shoulder: armR_shoulder }, armL: { pivot: armL, shoulder: armL_shoulder }, spine: spine };
 
     if (form === 1) {
         // === МОРГЕН (Клетчатая рубашка, борода, молот) ===
@@ -742,34 +742,30 @@
     }
   }, 500);
 
-  // --- 6. МЕХАНИКА: Смена формы (КЛАВИШИ 1 И 2) ---
+  // --- Смена формы (КЛАВИШИ 1 И 2) ---
   window.addEventListener('keydown', e => {
     if (typeof player === 'undefined' || player.character !== 'potato') return;
     
-    // Клавиша 1 - Морген
     if (e.code === 'Digit1' || e.code === 'Numpad1') {
       if (player.potatoForm === 1) return;
       player.potatoForm = 1;
-      player.maxHp = 800; 
-      player.hp = Math.min(player.hp, player.maxHp);
+      player.maxHp = 800; player.hp = Math.min(player.hp, player.maxHp);
       if (typeof window.rebuildHeroMesh === 'function') window.rebuildHeroMesh();
       if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ФОРМА: МОРГЕН', '#8B4513');
       if (window.__MP && window.__MP.room) window.__MP.room.send('charState', { potatoForm: 1 });
     }
     
-    // Клавиша 2 - Громтомат
     if (e.code === 'Digit2' || e.code === 'Numpad2') {
       if (player.potatoForm === 2) return;
       player.potatoForm = 2;
-      player.maxHp = 600; 
-      player.hp = Math.min(player.hp, player.maxHp);
+      player.maxHp = 600; player.hp = Math.min(player.hp, player.maxHp);
       if (typeof window.rebuildHeroMesh === 'function') window.rebuildHeroMesh();
       if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ФОРМА: ГРОМТОМАТ', '#FF2200');
       if (window.__MP && window.__MP.room) window.__MP.room.send('charState', { potatoForm: 2 });
     }
   });
 
-  // --- 7. МЕХАНИКА: ЛКМ (Основные атаки) ---
+  // --- МЕХАНИКА: ЛКМ (Основные атаки) ---
   let potatoCombo = 0, potatoComboTimer = 0;
   window.addEventListener('mousedown', e => {
     if (e.button !== 0 || player.character !== 'potato' || player.isDead) return;
@@ -820,7 +816,7 @@
 
   setInterval(() => { if (potatoComboTimer > 0) { potatoComboTimer -= 0.1; if (potatoComboTimer <= 0) potatoCombo = 0; } }, 100);
 
-  // --- 8. МЕХАНИКА: Q (Прыжок Молотом / Томатная Нова) ---
+  // --- МЕХАНИКА: Q / ПКМ (Прыжок Молотом / Томатная Нова) ---
   window.addEventListener('keydown', e => {
     if (e.code !== 'KeyQ' || player.character !== 'potato') return;
     if (player.potatoQCd > 0) return;
@@ -855,7 +851,7 @@
   });
   setInterval(() => { if (player.potatoQCd > 0) player.potatoQCd -= 0.1; }, 100);
 
-  // --- 9. МЕХАНИКА: C (Питание Корней / Ярость) ---
+  // --- МЕХАНИКА: C (Питание Корней / Ярость) ---
   window.addEventListener('keydown', e => {
     if (e.code !== 'KeyC' || player.character !== 'potato') return;
     if (player.potatoCCd > 0) return;
@@ -875,7 +871,7 @@
   });
   setInterval(() => { if (player.potatoCCd > 0) player.potatoCCd -= 0.1; }, 100);
 
-  // --- 10. МЕХАНИКА: F (Таран / Стрим соуса) ---
+  // --- МЕХАНИКА: F (Таран / Стрим соуса) ---
   window.addEventListener('keydown', e => {
     if (e.code !== 'KeyF' || player.character !== 'potato') return;
     if (player.potatoFCd > 0) return;
@@ -904,7 +900,7 @@
   });
   setInterval(() => { if (player.potatoFCd > 0) player.potatoFCd -= 0.1; }, 100);
 
-  // --- 11. МЕХАНИКА: T (Томатный портал) ---
+  // --- МЕХАНИКА: T (Томатный портал) ---
   window.addEventListener('keydown', e => {
     if (e.code !== 'KeyT' || player.character !== 'potato' || player.potatoForm !== 2) return;
     if (player.potatoTCd > 0) return;
@@ -933,5 +929,5 @@
     if (ep && cs && cs.style.display !== 'none') ep.style.display = 'none'; 
   }, 100);
 
-  console.log("🍌 [PATCH v39] Готово. Полный патч загружен. Формы на клавишах 1 и 2.");
+  console.log("🍌 [PATCH v42] Готово. Полная версия загружена.");
 })();
