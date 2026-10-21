@@ -1,4 +1,4 @@
-/* Banana Industries — Multiplayer Client v20 (Clean Balance) */
+/* Banana Industries — Multiplayer Client v22 (Full) */
 (function(){
 'use strict';
 
@@ -10,7 +10,7 @@ if (typeof buildings === 'undefined') { console.warn('[MP] buildings не опр
 
 var HOOKS14 = (window.__MP_HOOKS_V14 === 1);
 var HOOKS15 = (window.__MP_HOOKS_V15 === 1);
-console.log('[MP] v20. hooks14=' + (HOOKS14?'OK':'MISSING') + ' hooks15=' + (HOOKS15?'OK':'MISSING'));
+console.log('[MP] v22. hooks14=' + (HOOKS14?'OK':'MISSING') + ' hooks15=' + (HOOKS15?'OK':'MISSING'));
 
 var BOSS_TYPES = { titan:1, lemon:1, valkyrie:1, necromancer:1 };
 var CDN_LIST = ['https://unpkg.com/colyseus.js@^0.14.0/dist/colyseus.js', 'https://cdn.jsdelivr.net/npm/colyseus.js@^0.14.0/dist/colyseus.js', '/colyseus.js'];
@@ -33,10 +33,7 @@ var hitBufferTimer = null;
 function bufferHit(id, dmg, crit){
   if (!id) return;
   var existing = hitBuffer.get(id);
-  if (existing) { 
-    existing.dmg += dmg; // ★ СУММИРУЕМ урон (для лазеров и тиков)
-    existing.crit = existing.crit || !!crit; 
-  }
+  if (existing) { existing.dmg += dmg; existing.crit = existing.crit || !!crit; }
   else hitBuffer.set(id, { id: id, dmg: dmg, crit: !!crit });
   if (!hitBufferTimer) hitBufferTimer = setTimeout(flushHits, 40);
 }
@@ -47,7 +44,7 @@ function flushHits(){
   try { MP.room.send('hit_batch', { hits: arr }); } catch(e){}
 }
 
-// ★ Fix: создать exec-prompt если его нет в HTML
+// ★ Fix: exec-prompt element
 if (!document.getElementById('exec-prompt')) {
   var _ep = document.createElement('div'); _ep.id = 'exec-prompt';
   _ep.style.cssText = 'position:fixed;top:58%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:30;display:none;background:rgba(255,0,85,.92);color:#fff;border:3px solid #000;outline:2px solid #fff200;padding:8px 18px;font-family:Bangers,Impact,sans-serif;font-size:24px;letter-spacing:1.5px;text-shadow:2px 2px 0 #000;';
@@ -111,11 +108,21 @@ function spawnEffectVisual(type, x, y, z, radius){
       valkyrie_dive: function(){ ring(0xff7f00, r || 5, 0.2); if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,2,0)), 0xffcc00, 15); },
       necromancer_summon: function(){ ring(0xaa44ff, r || 8, 0.2); if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,2,0)), 0xaa44ff, 20); },
       spider_bite: function(){ if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,1,0)), 0xffee00, 6); },
-      freeze: function(){ 
-        var ice = new THREE.Mesh(new THREE.BoxGeometry(3.5, 4.5, 3.5), new THREE.MeshBasicMaterial({color: 0x00f2fe, transparent: true, opacity: 0.6, wireframe: true})); 
-        ice.position.set(pos.x, pos.y + 2, pos.z); scene.add(ice); 
-        setTimeout(function(){ scene.remove(ice); ice.geometry.dispose(); ice.material.dispose(); }, 2000); 
-        if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,1,0)), 0x00f2fe, 20); 
+      freeze: function(){
+        for(let i=0; i<3; i++) {
+          var ice = new THREE.Mesh(new THREE.BoxGeometry(3.5 - i*0.8, 4.5 - i*0.8, 3.5 - i*0.8),
+            new THREE.MeshBasicMaterial({color: 0x00f2fe, transparent: true, opacity: 0.35 + i*0.15, wireframe: true}));
+          ice.position.set(pos.x, pos.y + 2, pos.z); scene.add(ice);
+          setTimeout(function(){ scene.remove(ice); ice.geometry.dispose(); ice.material.dispose(); }, 3000);
+        }
+        if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,1,0)), 0x00f2fe, 30);
+      },
+      nano_ult: function(){
+        ring(0x00f2fe, r || 50, 0.2);
+        ring(0xff0055, (r || 50) * 0.8, 0.3);
+        ring(0xffffff, (r || 50) * 0.6, 0.4);
+        pillar(0x00f2fe, 45);
+        if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,2,0)), 0x00f2fe, 50);
       }
     };
     if (effectMap[type]) effectMap[type]();
@@ -173,7 +180,7 @@ if (typeof _origSum === 'function' && !_origSum._mpHooked) {
   _wSum._mpHooked = true; window.lemonSummonSpiders = _wSum;
 }
 
-// ★ Fix: Lemon plasma shot → PvP check
+// Lemon plasma shot → PvP check
 if (typeof window.lemonPlasmaShot === 'function' && !window.__MP_lemonPlasma_hooked) {
   window.__MP_lemonPlasma_hooked = true;
   var _origLemonShot = window.lemonPlasmaShot;
@@ -185,7 +192,7 @@ if (typeof window.lemonPlasmaShot === 'function' && !window.__MP_lemonPlasma_hoo
   };
 }
 
-// ★ Fix: Lemon beam → PvP в конусе
+// Lemon beam → PvP в конусе
 setInterval(function(){
   if (!MP.room || !window.__MP_MODE) return;
   if (!player || player.character !== 'lemon') return;
@@ -204,7 +211,7 @@ setInterval(function(){
         if (dist < bestD) { bestD = dist; bestId = id; }
       } catch(e){}
     });
-    if (bestId) MP.room.send('pvp', { targetId: bestId, damage: 15 }); // Луч наносит 15 урона каждые 100мс
+    if (bestId) MP.room.send('pvp', { targetId: bestId, damage: 15 });
   } catch(e){}
 }, 100);
 
@@ -385,7 +392,7 @@ function removeServerEnemy(id){
 function addSpider(id, d){
   if (!safeId(id) || !d) return; if (MP.serverSpiders.has(id)) return;
   var g = createSpiderMesh(); g.position.set(Number(d.x)||0, 0.1, Number(d.z)||0); scene.add(g);
-  MP.serverSpiders.set(id, { group: g, target: new THREE.Vector3(Number(d.x)||0, 0.1, Number(d.z)||0) });
+  MP.serverSpiders.set(id, { group: g, target: new THREE.Vector3(Number(d.x)||0, 0.1, Number(d.z)||0), attachedTo: null });
 }
 function removeSpider(id){
   if (!safeId(id)) return; var r = MP.serverSpiders.get(id); if (!r) return;
@@ -412,7 +419,6 @@ function syncSelfFromServer(me){
   player.score = Number(me.score) || 0; player.ep = Number(me.ep) || 0;
   try { var st = MP.room && MP.room.state; if (st) { if (typeof st.wave === 'number') player.wave = st.wave; if (typeof st.killedThisWave === 'number') player.enemiesKilledThisWave = st.killedThisWave; if (typeof st.goalThisWave === 'number') player.waveKillGoal = st.goalThisWave; } } catch(e){}
   
-  // ★ Rooted & Frozen локально
   var rooted = Number(me.rooted) || 0; var frozen = Number(me.frozen) || 0;
   if (rooted > 0.01 || frozen > 0.01) {
     MP._myRootedUntil = performance.now() + 200; player.pos.set(Number(me.x)||0, Number(me.y)||0, Number(me.z)||0); player.vel.set(0, 0, 0);
@@ -483,6 +489,12 @@ function attach(room){
     room.onMessage('dmg', function(m){ try { var r = MP.serverEnemies.get(m.enemyId); if (!r || !r.local || !r.local.group) return; if (typeof spawnParticles === 'function') { spawnParticles(r.local.group.position.clone().add(new THREE.Vector3(0,2,0)), 0xff9f1a, 2); } } catch(e){} });
     room.onMessage('enemy_die', function(m){ try { var r = MP.serverEnemies.get(m.enemyId); if (r && r.local && r.local.group && typeof spawnGroundCrackRing === 'function') { spawnGroundCrackRing(r.local.group.position, m.isBoss ? 0xff00ff : 0xff0055, m.isBoss ? 12 : 4.5); } if (m.isBoss && typeof spawnComicPop === 'function' && player && player.pos) { spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,7,0)), '💀 БОСС ПОВЕРЖЕН! 💀', '#ffea00'); } } catch(e){} });
     room.onMessage('wave_up', function(m){ try { if (typeof spawnComicPop === 'function' && player && player.pos) { spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,4,0)), '⚠ ВОЛНА '+(m.wave||'?')+' ⚠', '#ff9f1a'); } } catch(e){} });
+    // ★ V22: камикадзе attach
+    room.onMessage('kamikaze_attach', function(m) {
+      var r = MP.serverSpiders.get(m.spiderId);
+      if (r) r.attachedTo = m.targetId;
+      if (typeof SoundFX !== 'undefined') try { SoundFX._osc(880, 0.3, 'square', 0.15); } catch(e){}
+    });
   }
 
   room.onLeave = function(){ MP.room = null; window.__MP_MODE = false; setStatus('OFFLINE', true); setInfo(''); hitBuffer.clear(); if (hitBufferTimer) { clearTimeout(hitBufferTimer); hitBufferTimer = null; } Array.from(MP.remotes.keys()).forEach(removeRemote); Array.from(MP.serverEnemies.keys()).forEach(removeServerEnemy); Array.from(MP.serverSpiders.keys()).forEach(removeSpider); setRootedViz(false); setFrozenViz(false); MP._playersWired = false; MP._enemiesWired = false; MP._spidersWired = false; MP._msgHooksWired = false; tabPanel.style.display = 'none'; _tabDown = false; };
@@ -559,7 +571,14 @@ function tick(){
 
     if (MP.serverSpiders.size > 0 && MP.room.state.spiders) {
       MP.serverSpiders.forEach(function(r, id){
-        try { var s = MP.room.state.spiders.get(id); if (!s) return; var sx = Number(s.x) || 0, sz = Number(s.z) || 0; r.target.set(sx, 0.1, sz); r.group.position.lerp(r.target, 0.4); r.group.position.y = 0.3 + Math.sin(now * 0.01 + id.length) * 0.15; } catch(e){}
+        try { var s = MP.room.state.spiders.get(id); if (!s) return;
+          if (r.attachedTo) {
+            var tgt = MP.remotes.get(r.attachedTo);
+            if (!tgt) { var es = MP.serverEnemies.get(r.attachedTo); if (es) tgt = es.local ? { group: es.local.group } : es; }
+            if (tgt && tgt.group) { r.group.position.lerp(tgt.group.position.clone().add(new THREE.Vector3(0,1.5,0)), 0.5); r.group.position.y = 0.5 + Math.sin(now * 0.01 + id.length) * 0.15; return; }
+          }
+          var sx = Number(s.x) || 0, sz = Number(s.z) || 0; r.target.set(sx, 0.1, sz); r.group.position.lerp(r.target, 0.4); r.group.position.y = 0.3 + Math.sin(now * 0.01 + id.length) * 0.15;
+        } catch(e){}
       });
     }
 
@@ -569,6 +588,6 @@ function tick(){
 }
 tick();
 
-console.log('[MP] v20 готов. Clean Balance.');
+console.log('[MP] v22 готов. Полная версия с UI, kill feed, таблицей и новыми визуалами.');
 
 })();
