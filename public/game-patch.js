@@ -650,6 +650,171 @@
     }
     if (origDamageHeroPotato) return origDamageHeroPotato.apply(this, arguments);
   };
+  // ═══ 17. ★ ДОБАВЛЕНИЕ ПЕРСОНАЖА: МОРГЕНКАРТОШКА (МЕНЮ И МЕШ) ═══
+  
+  // Создаем 3D-модель для Моргена (Форма 1) и Громтомата (Форма 2)
+  window.createPotatoMesh = function(form) {
+    var g = new THREE.Group();
+    g.userData = { legL: {}, legR: {}, armR: {} }; // Заглушки для анимаций
 
+    if (form === 1) {
+      // --- МОРГЕН (Тяжелый танк) ---
+      // Тело (клетчатая рубашка - просто коричнево-красный цилиндр)
+      var body = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 1.6, 8), new THREE.MeshStandardMaterial({color: 0x8B0000}));
+      body.position.y = 1.6; g.add(body);
+      
+      // Живот (пузо)
+      var belly = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C}));
+      belly.position.set(0, 1.4, 0.5); belly.scale.set(1, 0.8, 0.5); g.add(belly);
+
+      // Голова
+      var head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C}));
+      head.position.y = 2.9; g.add(head);
+
+      // Борода (темная)
+      var beard = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.6, 6), new THREE.MeshStandardMaterial({color: 0x3E2723}));
+      beard.position.set(0, 2.6, 0.3); beard.rotation.x = Math.PI; g.add(beard);
+
+      // Молот (в правой руке)
+      var hammerGroup = new THREE.Group();
+      var handle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.5, 6), new THREE.MeshStandardMaterial({color: 0x5D4037}));
+      handle.rotation.z = Math.PI / 2; hammerGroup.add(handle);
+      var hammerHead = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.5), new THREE.MeshStandardMaterial({color: 0x9E9E9E}));
+      hammerHead.position.x = 0.7; hammerGroup.add(hammerHead);
+      hammerGroup.position.set(1.0, 2.0, 0); hammerGroup.rotation.z = -0.5; g.add(hammerGroup);
+      
+      // Ноги
+      var legL = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x424242}));
+      legL.position.set(-0.3, 0.5, 0); g.add(legL); g.userData.legL.pivot = legL;
+      var legR = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x424242}));
+      legR.position.set(0.3, 0.5, 0); g.add(legR); g.userData.legR.pivot = legR;
+      
+      // Правая рука (держит молот)
+      var armR = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.2, 6), new THREE.MeshStandardMaterial({color: 0x8B0000}));
+      armR.position.set(0.9, 2.0, 0); armR.rotation.z = -0.3; g.add(armR); g.userData.armR.pivot = armR;
+
+    } else {
+      // --- ГРОМТОМАТ (Дамагер) ---
+      // Тело (красное пузо)
+      var body = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 12), new THREE.MeshStandardMaterial({color: 0xFF0000}));
+      body.position.y = 1.4; body.scale.set(1.1, 1.2, 0.9); g.add(body);
+      
+      // Голова (красная)
+      var head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 12), new THREE.MeshStandardMaterial({color: 0xFF2200}));
+      head.position.y = 2.6; g.add(head);
+
+      // Глаза (белые с зрачками)
+      var eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
+      eyeL.position.set(-0.2, 2.7, 0.5); g.add(eyeL);
+      var eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
+      eyeR.position.set(0.2, 2.7, 0.5); g.add(eyeR);
+      
+      // Зрачки (черные)
+      var pupilL = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({color: 0x000000}));
+      pupilL.position.set(-0.2, 2.7, 0.63); g.add(pupilL);
+      var pupilR = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({color: 0x000000}));
+      pupilR.position.set(0.2, 2.7, 0.63); g.add(pupilR);
+
+      // Зеленые перчатки (руки)
+      var armL = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshStandardMaterial({color: 0x00FF00}));
+      armL.position.set(-0.9, 1.6, 0.4); g.add(armL);
+      var armR = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshStandardMaterial({color: 0x00FF00}));
+      armR.position.set(0.9, 1.6, 0.4); g.add(armR); g.userData.armR.pivot = armR;
+      
+      // Ноги
+      var legL = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.8, 6), new THREE.MeshStandardMaterial({color: 0x0000FF}));
+      legL.position.set(-0.3, 0.4, 0); g.add(legL); g.userData.legL.pivot = legL;
+      var legR = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.8, 6), new THREE.MeshStandardMaterial({color: 0x0000FF}));
+      legR.position.set(0.3, 0.4, 0); g.add(legR); g.userData.legR.pivot = legR;
+    }
+    return g;
+  };
+
+  // Перехватываем создание меша в игре (если персонаж - картошка)
+  if (typeof window.createArticulatedHero === 'function') {
+    const _origArticulated = window.createArticulatedHero;
+    window.createArticulatedHero = function(suit, isClone) {
+      if (typeof player !== 'undefined' && player.character === 'potato') {
+        return window.createPotatoMesh(player.potatoForm || 1);
+      }
+      return _origArticulated.apply(this, arguments);
+    };
+  }
+  
+  // Принудительное обновление меша при переключении формы
+  const origRebuildPotato = window.rebuildHeroMesh;
+  window.rebuildHeroMesh = function() {
+    if (origRebuildPotato) origRebuildPotato.apply(this, arguments);
+    if (player && player.character === 'potato' && playerGroup) {
+        // Удаляем старый меш
+        while(playerGroup.children.length > 0){ 
+            const c = playerGroup.children[0]; 
+            playerGroup.remove(c); 
+            if (c.traverse) c.traverse(o => { if(o.geometry) o.geometry.dispose(); }); 
+        }
+        // Создаем новый
+        const newMesh = window.createPotatoMesh(player.potatoForm || 1);
+        player.mesh = newMesh;
+        playerGroup.add(newMesh);
+    }
+  };
+
+  // Функция выбора персонажа
+  window.equipPotato = function() {
+    player.character = 'potato';
+    player.potatoForm = 1;
+    player.maxHp = 800; 
+    player.hp = 800;
+    player.suitIdx = 4; // Чтобы интерфейс не ломался
+    PEPPER_MODE = false; CARROT_MODE = false; LEMON_MODE = false;
+    
+    if (typeof rebuildHeroMesh === 'function') rebuildHeroMesh();
+    if (typeof updateHUD === 'function') updateHUD();
+    if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'МОРГЕНКАРТОШКА ГОТОВ!', '#8B4513');
+    document.getElementById('char-select').style.display = 'none';
+    
+    // Скрываем панели других персонажей
+    const pPanel = document.getElementById('pepper-evo-panel'); if(pPanel) pPanel.style.display = 'none';
+    
+    // Отправляем в мультиплеер
+    if (window.__MP && window.__MP.room) {
+      window.__MP.room.send('charState', { char: 'potato', potatoForm: 1 });
+    }
+  };
+
+  // Добавляем кнопку в меню выбора
+  setTimeout(() => {
+    const charSelect = document.getElementById('char-select');
+    if (charSelect && !document.getElementById('btn-potato')) {
+      // Находим контейнер для кнопок (обычно grid)
+      const grid = charSelect.querySelector('div') || charSelect;
+      
+      const btn = document.createElement('button');
+      btn.id = 'btn-potato';
+      btn.className = 'char-btn'; // Если есть стили
+      btn.innerHTML = '<span style="font-size:40px">🥔</span><br><span style="font-size:14px;font-weight:900">МОРГЕН</span><br><span style="font-size:10px;color:#aaa">Танк / Дамагер</span>';
+      btn.style.cssText = 'background:#4a2e1b;border:3px solid #8B4513;color:#fff;padding:15px;border-radius:8px;cursor:pointer;transition:transform 0.2s, box-shadow 0.2s;margin:5px;';
+      
+      btn.onmouseover = () => { btn.style.transform = 'scale(1.05)'; btn.style.boxShadow = '0 0 20px #8B4513'; };
+      btn.onmouseout = () => { btn.style.transform = 'scale(1)'; btn.style.boxShadow = 'none'; };
+      
+      btn.onclick = window.equipPotato;
+      grid.appendChild(btn);
+      
+      console.log("🥔 [PATCH] Кнопка Моргенкартошки добавлена в меню!");
+    }
+  }, 2000);
+
+  // Обновляем клиент мультиплеера для отрисовки меша картошки
+  // (Если multiplayer-client.js уже загружен, подменяем функцию)
+  setTimeout(() => {
+    if (window.__MP) {
+        // В multiplayer-client.js функция createRemoteMesh уже имеет блок для 'potato',
+        // но мы можем переопределить его на лету, если там заглушка.
+        // (Однако в v23 я уже прописал вызов window.createPotatoMesh, так что всё будет ок)
+        console.log("🥔 [PATCH] Мультиплеер готов к синхронизации Моргенкартошки.");
+    }
+  }, 1000);
+  
   console.log("🍌 [PATCH v33] Готово.");
 })();
