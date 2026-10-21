@@ -1,14 +1,17 @@
 // =======================================================
-// BANANA INDUSTRIES - GLOBAL PATCH (v37)
-// ПОЛНАЯ ВЕРСИЯ: v32 (сохранен 100%) + Моргенкартошка + Фикс Т Егора
+// BANANA INDUSTRIES - GLOBAL PATCH (v39)
+// ПОЛНАЯ ВЕРСИЯ: Все старые фиксы + Моргенкартошка (Клавиши 1 и 2)
 // =======================================================
 (function() {
-  console.log("🍌 [PATCH] v37 — Полная версия. Моргенкартошка & Громтомат + Все старые фиксы.");
+  console.log("🍌 [PATCH] v39 — Загружен полный патч. Клавиши 1 (Морген) и 2 (Громтомат).");
 
   // ═══ 1. Убираем кусты ═══
   if (typeof addProp === 'function') {
     const _orig = window.addProp;
-    window.addProp = function(x, z, type) { if (type === 'bush') return; _orig.apply(this, arguments); };
+    window.addProp = function(x, z, type) { 
+      if (type === 'bush') return; 
+      _orig.apply(this, arguments); 
+    };
   }
 
   // ═══ 2. УНИВЕРСАЛЬНЫЙ ФИКС НОГ МОРКОВИ (по bounding box) ═══
@@ -25,11 +28,13 @@
     } catch(e){}
   }
   setInterval(fixCarrotMeshGround, 500);
+  
   const _origRebuildHeroMesh = window.rebuildHeroMesh;
   window.rebuildHeroMesh = function() {
     if (_origRebuildHeroMesh) _origRebuildHeroMesh.apply(this, arguments);
     setTimeout(fixCarrotMeshGround, 10);
   };
+  
   const _origToggleCarrot = window.toggleCarrotForm;
   window.toggleCarrotForm = function() {
     if (_origToggleCarrot) _origToggleCarrot.apply(this, arguments);
@@ -57,8 +62,13 @@
         const p = TimeOfDay.progress;
         const angle = p * Math.PI * 2 - Math.PI / 2;
         sunMoon.position.set(Math.cos(angle) * 3500, Math.sin(angle) * 3500, -1000);
-        if (p < 0.2 || p > 0.8) { sunMoon.material.color.setHex(0xc0c0ff); sunMoon.scale.setScalar(0.6); }
-        else { sunMoon.material.color.setHex(0xffee88); sunMoon.scale.setScalar(1.0); }
+        if (p < 0.2 || p > 0.8) { 
+          sunMoon.material.color.setHex(0xc0c0ff); 
+          sunMoon.scale.setScalar(0.6); 
+        } else { 
+          sunMoon.material.color.setHex(0xffee88); 
+          sunMoon.scale.setScalar(1.0); 
+        }
       }
     }, 100);
   }, 1000);
@@ -74,7 +84,9 @@
         const r = 25 + Math.random() * 35;
         const h = 8 + Math.random() * 15;
         const hill = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6, 0, Math.PI*2, 0, Math.PI/2), hillMat);
-        hill.position.set(x, 0, z); hill.scale.y = h / r; scene.add(hill);
+        hill.position.set(x, 0, z); 
+        hill.scale.y = h / r; 
+        scene.add(hill);
       }
     }
   }, 1500);
@@ -94,7 +106,8 @@
           if (en.flying) continue;
           if (Math.abs(en.group.position.y - preY) > 3) {
             hiddenEnemies.push({ en: en, x: en.group.position.x, z: en.group.position.z });
-            en.group.position.x = 99999; en.group.position.z = 99999;
+            en.group.position.x = 99999; 
+            en.group.position.z = 99999;
           }
         }
       }
@@ -103,11 +116,21 @@
 
       for (let i = 0; i < hiddenEnemies.length; i++) {
         const h = hiddenEnemies[i];
-        if (h.en.group && h.en.group.position) { h.en.group.position.x = h.x; h.en.group.position.z = h.z; }
+        if (h.en.group && h.en.group.position) { 
+          h.en.group.position.x = h.x; 
+          h.en.group.position.z = h.z; 
+        }
       }
 
       if (player.pos.y < 0) player.pos.y = 0;
-      if (isFrozen) { player.pos.x = savedX; player.pos.z = savedZ; player.vel.x = 0; player.vel.z = 0; playerGroup.position.copy(player.pos); }
+      
+      if (isFrozen) { 
+        player.pos.x = savedX; 
+        player.pos.z = savedZ; 
+        player.vel.x = 0; 
+        player.vel.z = 0; 
+        playerGroup.position.copy(player.pos); 
+      }
 
       if (player.activeModeF && player.character !== 'banana') {
         player.activeModeF = false;
@@ -118,7 +141,11 @@
 
       if (player.activeModeF && player.suitIdx === 3 && player.character === 'banana' && !PEPPER_MODE && !CARROT_MODE && !LEMON_MODE) {
         player.en -= 15 * dt;
-        if (player.en <= 0) { player.en = 0; player.activeModeF = false; if (player.mesh && player.mesh.userData.limeShield) player.mesh.userData.limeShield.visible = false; }
+        if (player.en <= 0) { 
+          player.en = 0; 
+          player.activeModeF = false; 
+          if (player.mesh && player.mesh.userData.limeShield) player.mesh.userData.limeShield.visible = false; 
+        }
       }
 
       if (!player.isDead && player.attackTimer <= 0 && !player.isFlying && !player.isDodging && !player.isSliding && !player.isWallRunning && !isFrozen) {
@@ -133,12 +160,9 @@
     };
   }
 
-  // ═══ 6. Усиленный щит / Броня Моргена ═══
+  // ═══ 6. Усиленный щит ═══
   const origDamageToHero = window.applyDamageToHero;
   window.applyDamageToHero = function(dmg) {
-    if (player.character === 'potato' && player.potatoForm === 1 && player._potatoArmor > 0) {
-      dmg = Math.floor(dmg * 0.5); 
-    }
     if (player.activeModeF && player.suitIdx === 3 && player.character === 'banana' && !PEPPER_MODE && !CARROT_MODE && !LEMON_MODE) {
       const drain = dmg * 1.5;
       if (player.en >= drain) {
@@ -153,7 +177,7 @@
     if (origDamageToHero) return origDamageToHero.apply(this, arguments);
   };
 
-  // ═══ 7. Меню + Дрон ═══
+  // ═══ 7. Меню + Дрон (Шрекич) ═══
   window.addEventListener('keydown', e => {
     if (e.code === 'Escape' && typeof gameStarted !== 'undefined' && gameStarted) {
       document.getElementById('start-screen').style.display = 'flex';
@@ -164,12 +188,16 @@
         Companion._disabled = !Companion._disabled;
         if (Companion._disabled) {
           if (Companion.group) Companion.group.visible = false;
-          Companion.shootCd = 99999; Companion.buffCd = 99999;
-          player.companionShield = 0; player.companionRegen = 0; player.companionDmg = 0;
+          Companion.shootCd = 99999; 
+          Companion.buffCd = 99999;
+          player.companionShield = 0; 
+          player.companionRegen = 0; 
+          player.companionDmg = 0;
           if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ДРОН ОТКЛЮЧЕН', '#ff0000');
         } else {
           if (Companion.group) Companion.group.visible = true;
-          Companion.shootCd = 0; Companion.buffCd = 15;
+          Companion.shootCd = 0; 
+          Companion.buffCd = 15;
           if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ДРОН ВКЛЮЧЕН', '#00ff66');
         }
       }
@@ -180,7 +208,11 @@
     const origUpdate = Companion.update;
     Companion.update = function(dt, now) {
       origUpdate.call(this, dt, now);
-      if (this._disabled && this.group) { this.group.visible = false; this.shootCd = 99999; this.buffCd = 99999; }
+      if (this._disabled && this.group) { 
+        this.group.visible = false; 
+        this.shootCd = 99999; 
+        this.buffCd = 99999; 
+      }
     };
     const origFind = Companion.findNearestEnemy;
     Companion.findNearestEnemy = function(maxD) {
@@ -193,7 +225,10 @@
       }
       if (origFind) {
         const enemy = origFind.call(this, maxD);
-        if (enemy) { const d = enemy.group.position.distanceTo(this.group.position); if (d < bd) { bd = d; best = enemy; } }
+        if (enemy) { 
+          const d = enemy.group.position.distanceTo(this.group.position); 
+          if (d < bd) { bd = d; best = enemy; } 
+        }
       }
       return best;
     };
@@ -405,7 +440,7 @@
 
   setInterval(() => { if (player.consumeCd > 0) player.consumeCd = Math.max(0, player.consumeCd - 0.1); }, 100);
 
-  // ═══ 10. T — Божественный синтез (УСИЛЕН + КД 102.5с) ═══
+  // ═══ 10. T — Божественный синтез (Егор) ═══
   let tHoldTimer = 0, tCharging = false, nanoUltCd = 0;
   const tPanel = document.createElement('div');
   tPanel.style.cssText = 'position:fixed;bottom:180px;left:50%;transform:translateX(-50%);width:340px;background:rgba(0,20,40,.95);border:3px solid #00f2fe;border-radius:8px;padding:12px;text-align:center;z-index:50;display:none;box-shadow:0 0 30px rgba(0,242,254,.7),5px 5px 0 #000';
@@ -418,7 +453,13 @@
       if (!tCharging) { tCharging = true; tHoldTimer = 0; tPanel.style.display = 'block'; }
     }
   });
-  window.addEventListener('keyup', e => { if (e.code === 'KeyT' && tCharging) { tCharging = false; tPanel.style.display = 'none'; } });
+  
+  window.addEventListener('keyup', e => { 
+    if (e.code === 'KeyT' && tCharging) { 
+      tCharging = false; 
+      tPanel.style.display = 'none'; 
+    } 
+  });
 
   setInterval(() => {
     if (nanoUltCd > 0) nanoUltCd -= 0.1;
@@ -426,9 +467,7 @@
       tHoldTimer += 0.1;
       document.getElementById('t-bar').style.width = Math.min(100, (tHoldTimer / 5) * 100) + '%';
       if (tHoldTimer >= 5) {
-        tCharging = false; tPanel.style.display = 'none'; 
-        nanoUltCd = 102.5; // ★ Увеличено на 2.5 секунды (было 100)
-        
+        tCharging = false; tPanel.style.display = 'none'; nanoUltCd = 102.5;
         const beam = new THREE.Mesh(new THREE.CylinderGeometry(2, 15, 40, 16), new THREE.MeshBasicMaterial({ color: 0x00f2fe, transparent: true, opacity: 0.7, wireframe: true }));
         beam.rotation.x = Math.PI / 2;
         const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
@@ -551,108 +590,127 @@
   }
 
   // ══════════════════════════════════════════════════════════
-  // ═══ 16. ★ МОРГЕНКАРТОШКА & ГРОМТОМАТ (НОВОЕ) ═══
+  // ═══ 16. ★★★ НОВЫЙ ПЕРСОНАЖ: МОРГЕНКАРТОШКА И ГРОМТОМАТ ★★★
   // ══════════════════════════════════════════════════════════
   
+  // --- Полная 3D-модель ---
   window.createPotatoMesh = function(form) {
-    form = (form === 2) ? 2 : 1; // Защита от undefined
+    form = (form === 2) ? 2 : 1; 
     var g = new THREE.Group();
     var spine = new THREE.Object3D(); g.add(spine);
     var legL = new THREE.Group(), legL_hip = new THREE.Group(), legL_knee = new THREE.Group(); legL.add(legL_hip); legL_hip.add(legL_knee); g.add(legL);
     var legR = new THREE.Group(), legR_hip = new THREE.Group(), legR_knee = new THREE.Group(); legR.add(legR_hip); legR_hip.add(legR_knee); g.add(legR);
     var armR = new THREE.Group(), armR_shoulder = new THREE.Group(); armR.add(armR_shoulder); g.add(armR);
+    var armL = new THREE.Group(), armL_shoulder = new THREE.Group(); armL.add(armL_shoulder); g.add(armL);
     
-    g.userData = {
-        legL: { pivot: legL, hip: legL_hip, knee: legL_knee },
-        legR: { pivot: legR, hip: legR_hip, knee: legR_knee },
-        armR: { pivot: armR, shoulder: armR_shoulder },
-        spine: spine
+    g.userData = { 
+        legL: { pivot: legL, hip: legL_hip, knee: legL_knee }, 
+        legR: { pivot: legR, hip: legR_hip, knee: legR_knee }, 
+        armR: { pivot: armR, shoulder: armR_shoulder }, 
+        armL: { pivot: armL, shoulder: armL_shoulder }, 
+        spine: spine 
     };
 
     if (form === 1) {
-        // МОРГЕН (Танк)
+        // === МОРГЕН (Клетчатая рубашка, борода, молот) ===
         var body = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 1.6, 8), new THREE.MeshStandardMaterial({color: 0x8B0000}));
         body.position.y = 1.6; spine.add(body);
-        var belly = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C}));
-        belly.position.set(0, 1.4, 0.5); belly.scale.set(1, 0.8, 0.5); spine.add(belly);
-        var head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C}));
-        head.position.y = 2.9; spine.add(head);
-        var beard = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.6, 6), new THREE.MeshStandardMaterial({color: 0x3E2723}));
-        beard.position.set(0, 2.6, 0.3); beard.rotation.x = Math.PI; spine.add(beard);
+        for(let i=0; i<4; i++){
+            var stripe = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.1, 0.1), new THREE.MeshStandardMaterial({color: 0x111111}));
+            stripe.position.set(0, 1.1 + i*0.4, 0.81); spine.add(stripe);
+        }
+        var belly = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C})); 
+        belly.position.set(0, 1.2, 0.4); belly.scale.set(1.1, 0.9, 0.8); spine.add(belly);
+        var head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C})); 
+        head.position.y = 2.8; spine.add(head);
+        var hair = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.8, 1.0), new THREE.MeshStandardMaterial({color: 0x2a1a0f})); 
+        hair.position.set(0, 3.0, -0.1); spine.add(hair);
+        var beard = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.7, 6), new THREE.MeshStandardMaterial({color: 0x2a1a0f})); 
+        beard.position.set(0, 2.5, 0.4); beard.rotation.x = Math.PI; spine.add(beard);
         
-        var armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.2, 6), new THREE.MeshStandardMaterial({color: 0x8B0000}));
-        armRMesh.position.y = -0.6; armR_shoulder.add(armRMesh);
-        var legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x424242}));
-        legLMesh.position.y = -0.5; legL_hip.add(legLMesh);
-        var legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x424242}));
-        legRMesh.position.y = -0.5; legR_hip.add(legRMesh);
+        var hammerGroup = new THREE.Group();
+        var handle = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.6, 6), new THREE.MeshStandardMaterial({color: 0x5D4037}));
+        handle.rotation.x = Math.PI/2; hammerGroup.add(handle);
+        var headH = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.8, 0.8), new THREE.MeshStandardMaterial({color: 0x9E9E9E}));
+        headH.position.y = 0.7; hammerGroup.add(headH);
+        hammerGroup.position.set(0, -1.0, 0.5); armR_shoulder.add(hammerGroup);
+        
+        var armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.2, 6), new THREE.MeshStandardMaterial({color: 0x8B0000})); armRMesh.position.y = -0.6; armR_shoulder.add(armRMesh);
+        var legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x424242})); legLMesh.position.y = -0.5; legL_hip.add(legLMesh);
+        var legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x424242})); legRMesh.position.y = -0.5; legR_hip.add(legRMesh);
         
         legL.position.set(-0.3, 1.0, 0); legR.position.set(0.3, 1.0, 0); armR.position.set(0.9, 2.0, 0); armR_shoulder.rotation.z = -0.3;
+
     } else {
-        // ГРОМТОМАТ (Дамагер)
-        var body = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 12), new THREE.MeshStandardMaterial({color: 0xFF0000}));
-        body.position.y = 1.4; body.scale.set(1.1, 1.2, 0.9); spine.add(body);
-        var head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 12), new THREE.MeshStandardMaterial({color: 0xFF2200}));
-        head.position.y = 2.6; spine.add(head);
-        var eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
-        eyeL.position.set(-0.2, 2.7, 0.5); spine.add(eyeL);
-        var eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
-        eyeR.position.set(0.2, 2.7, 0.5); spine.add(eyeR);
-        
-        var armRMesh = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshStandardMaterial({color: 0x00FF00}));
-        armRMesh.position.y = -0.5; armR_shoulder.add(armRMesh);
-        var legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.8, 6), new THREE.MeshStandardMaterial({color: 0x0000FF}));
-        legLMesh.position.y = -0.4; legL_hip.add(legLMesh);
-        var legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.8, 6), new THREE.MeshStandardMaterial({color: 0x0000FF}));
-        legRMesh.position.y = -0.4; legR_hip.add(legRMesh);
-        
-        legL.position.set(-0.3, 0.8, 0); legR.position.set(0.3, 0.8, 0); armR.position.set(0.9, 1.6, 0.4);
+        // === ГРОМТОМАТ (Красная голова, зеленые перчатки) ===
+        var body = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.85, 1.6, 10), new THREE.MeshStandardMaterial({color: 0x4a0010})); 
+        body.position.y = 1.6; spine.add(body);
+        var belly = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 10), new THREE.MeshStandardMaterial({color: 0xFF2200})); 
+        belly.position.set(0, 1.2, 0.4); belly.scale.set(1.1, 0.9, 0.8); spine.add(belly);
+        var head = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 12), new THREE.MeshStandardMaterial({color: 0xFF0000})); 
+        head.position.y = 2.8; spine.add(head);
+        var hair = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 1.0), new THREE.MeshStandardMaterial({color: 0x111111})); 
+        hair.position.set(0, 3.2, -0.1); spine.add(hair);
+        var eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), new THREE.MeshBasicMaterial({color: 0xFFFFFF})); eyeL.position.set(-0.2, 2.9, 0.45); spine.add(eyeL);
+        var eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), new THREE.MeshBasicMaterial({color: 0xFFFFFF})); eyeR.position.set(0.2, 2.9, 0.45); spine.add(eyeR);
+        var gloveR = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), new THREE.MeshStandardMaterial({color: 0x00FF00})); gloveR.position.y = -0.8; armR_shoulder.add(gloveR);
+        var gloveL = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), new THREE.MeshStandardMaterial({color: 0x00FF00})); gloveL.position.y = -0.8; armL_shoulder.add(gloveL);
+        var armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x4a0010})); armRMesh.position.y = -0.4; armR_shoulder.add(armRMesh);
+        var armLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x4a0010})); armLMesh.position.y = -0.4; armL_shoulder.add(armLMesh);
+        var legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.8, 6), new THREE.MeshStandardMaterial({color: 0x111111})); legLMesh.position.y = -0.4; legL_hip.add(legLMesh);
+        var legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.8, 6), new THREE.MeshStandardMaterial({color: 0x111111})); legRMesh.position.y = -0.4; legR_hip.add(legRMesh);
+        legL.position.set(-0.3, 0.8, 0); legR.position.set(0.3, 0.8, 0); armR.position.set(0.9, 1.6, 0.4); armL.position.set(-0.9, 1.6, 0.4);
     }
     return g;
   };
 
-  // Пересоздание меша картошки
+  // --- Блокировка Шрекича и костюмов ---
+  setInterval(() => {
+    if (typeof player !== 'undefined' && player.character === 'potato') {
+        if (typeof Companion !== 'undefined' && Companion.group) { Companion.group.visible = false; Companion._disabled = true; }
+        const hotbar = document.getElementById('suit-hotbar');
+        if (hotbar) hotbar.style.display = 'none';
+        const evoPanel = document.getElementById('pepper-evo-panel');
+        if (evoPanel) evoPanel.style.display = 'none';
+    } else {
+        if (typeof Companion !== 'undefined' && Companion.group && !Companion._disabled) { Companion.group.visible = true; }
+        const hotbar = document.getElementById('suit-hotbar');
+        if (hotbar) hotbar.style.display = 'flex'; 
+    }
+  }, 500);
+
+  // --- Пересоздание меша ---
   const _origRebuildHeroMeshWithPatch = window.rebuildHeroMesh;
   window.rebuildHeroMesh = function() {
     if (_origRebuildHeroMeshWithPatch) _origRebuildHeroMeshWithPatch.apply(this, arguments);
     setTimeout(() => {
       if (typeof player !== 'undefined' && player.character === 'potato') {
         if (player.mesh) player.mesh.visible = false;
-        if (window.__potatoMesh && window.__potatoMesh.parent) {
-          window.__potatoMesh.parent.remove(window.__potatoMesh);
-          window.__potatoMesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
-        }
+        if (window.__potatoMesh && window.__potatoMesh.parent) { window.__potatoMesh.parent.remove(window.__potatoMesh); window.__potatoMesh.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
         const pm = window.createPotatoMesh(player.potatoForm || 1);
         window.__potatoMesh = pm;
         if (playerGroup) playerGroup.add(pm);
       } else {
         if (player.mesh) player.mesh.visible = true;
-        if (window.__potatoMesh && window.__potatoMesh.parent) {
-          window.__potatoMesh.parent.remove(window.__potatoMesh);
-          window.__potatoMesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
-          window.__potatoMesh = null;
-        }
+        if (window.__potatoMesh && window.__potatoMesh.parent) { window.__potatoMesh.parent.remove(window.__potatoMesh); window.__potatoMesh.traverse(o => { if (o.geometry) o.geometry.dispose(); }); window.__potatoMesh = null; }
       }
     }, 10);
   };
 
-  // Выбор персонажа
+  // --- Выбор персонажа ---
   window.equipPotato = function() {
     console.log('[POTATO] Клик по кнопке!');
     try {
-      if (typeof equipBanana === 'function') equipBanana();
+      if (typeof equipBanana === 'function') equipBanana(); 
       
-      const cs = document.getElementById('char-select');
-      if (cs) cs.style.display = 'none';
-      const ss = document.getElementById('start-screen');
-      if (ss) ss.style.display = 'none';
+      const cs = document.getElementById('char-select'); if (cs) cs.style.display = 'none';
+      const ss = document.getElementById('start-screen'); if (ss) ss.style.display = 'none';
 
       setTimeout(() => {
         if (typeof player === 'undefined') return;
-        player.character = 'potato';
+        player.character = 'potato'; 
         player.potatoForm = 1;
-        player.maxHp = 800;
-        player.hp = 800;
+        player.maxHp = 800; player.hp = 800;
         
         if (typeof PEPPER_MODE !== 'undefined') PEPPER_MODE = false;
         if (typeof CARROT_MODE !== 'undefined') CARROT_MODE = false;
@@ -660,144 +718,220 @@
         
         if (typeof window.rebuildHeroMesh === 'function') window.rebuildHeroMesh();
         if (typeof updateHUD === 'function') updateHUD();
-        
-        if (window.__MP && window.__MP.room) {
-          window.__MP.room.send('charState', { char: 'potato', potatoForm: 1 });
-        }
-        if (typeof spawnComicPop === 'function' && player.pos) {
-          spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'МОРГЕНКАРТОШКА ГОТОВ!', '#8B4513');
-        }
-        console.log('[POTATO] Персонаж установлен, HP:', player.hp);
+        if (window.__MP && window.__MP.room) window.__MP.room.send('charState', { char: 'potato', potatoForm: 1 });
+        if (typeof spawnComicPop === 'function' && player.pos) spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'МОРГЕНКАРТОШКА ГОТОВ!', '#8B4513');
       }, 150);
-    } catch(e) {
-      console.error('[POTATO] Ошибка:', e);
-    }
+    } catch(e) { console.error('[POTATO] Ошибка:', e); }
   };
 
-  // Кнопка
+  // --- Кнопка в меню ---
   setInterval(() => {
     const cs = document.getElementById('char-select');
     if (cs && !document.getElementById('btn-potato') && cs.style.display !== 'none') {
-      const btn = document.createElement('div');
-      btn.id = 'btn-potato';
-      
+      const btn = document.createElement('div'); btn.id = 'btn-potato';
       let container = cs.querySelector('.char-cards') || cs.querySelector('.char-grid');
-      if (!container) {
-        const firstCard = cs.querySelector('.char-card, [onclick*="equip"]');
-        if (firstCard) container = firstCard.parentNode;
-      }
+      if (!container) { const f = cs.querySelector('.char-card, [onclick*="equip"]'); if (f) container = f.parentNode; }
       if (!container) container = cs;
-
-      const existing = container.querySelector('.char-card, [onclick*="equip"]');
-      if (existing) btn.className = existing.className;
-      
+      const ex = container.querySelector('.char-card, [onclick*="equip"]'); if (ex) btn.className = ex.className;
       btn.style.cssText = 'width:180px;height:220px;background:#4a2e1b;border:3px solid #8B4513;color:#fff;padding:15px;cursor:pointer;text-align:center;border-radius:8px;margin:10px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:auto;position:relative;z-index:9999;transition:transform 0.2s, box-shadow 0.2s;';
       btn.innerHTML = '<div style="font-size:60px">🥔</div><div style="font-size:16px;font-weight:900;line-height:1.2">МОРГЕНКАРТОШКА<br>& ГРОМТОМАТ</div><div style="font-size:12px;color:#aaa;margin-top:5px">Танк / Дамагер</div>';
-      
       btn.onmouseover = () => { btn.style.transform = 'scale(1.05)'; btn.style.boxShadow = '0 0 20px #8B4513'; };
       btn.onmouseout = () => { btn.style.transform = 'scale(1)'; btn.style.boxShadow = 'none'; };
-      
-      btn.onclick = function(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        window.equipPotato();
-      };
-      
+      btn.onclick = function(e) { e.stopPropagation(); e.preventDefault(); window.equipPotato(); };
       container.appendChild(btn);
-      console.log('🥔 [PATCH] Кнопка добавлена!');
     }
   }, 500);
 
-  // Смена формы (R)
+  // --- 6. МЕХАНИКА: Смена формы (КЛАВИШИ 1 И 2) ---
   window.addEventListener('keydown', e => {
-    if (e.code === 'KeyR' && player.character === 'potato') {
-      if (player.potatoSwitchCd > 0) return;
-      player.potatoSwitchCd = 2.0; 
-      player.potatoForm = (player.potatoForm === 1) ? 2 : 1;
-      player.maxHp = (player.potatoForm === 1) ? 800 : 600;
+    if (typeof player === 'undefined' || player.character !== 'potato') return;
+    
+    // Клавиша 1 - Морген
+    if (e.code === 'Digit1' || e.code === 'Numpad1') {
+      if (player.potatoForm === 1) return;
+      player.potatoForm = 1;
+      player.maxHp = 800; 
       player.hp = Math.min(player.hp, player.maxHp);
-      
       if (typeof window.rebuildHeroMesh === 'function') window.rebuildHeroMesh();
-      
-      if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), player.potatoForm === 1 ? 'ФОРМА: МОРГЕН' : 'ФОРМА: ГРОМТОМАТ', '#ffaa00');
-      if (window.__MP && window.__MP.room) window.__MP.room.send('charState', { potatoForm: player.potatoForm });
-      console.log('[POTATO] Смена формы:', player.potatoForm);
+      if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ФОРМА: МОРГЕН', '#8B4513');
+      if (window.__MP && window.__MP.room) window.__MP.room.send('charState', { potatoForm: 1 });
+    }
+    
+    // Клавиша 2 - Громтомат
+    if (e.code === 'Digit2' || e.code === 'Numpad2') {
+      if (player.potatoForm === 2) return;
+      player.potatoForm = 2;
+      player.maxHp = 600; 
+      player.hp = Math.min(player.hp, player.maxHp);
+      if (typeof window.rebuildHeroMesh === 'function') window.rebuildHeroMesh();
+      if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ФОРМА: ГРОМТОМАТ', '#FF2200');
+      if (window.__MP && window.__MP.room) window.__MP.room.send('charState', { potatoForm: 2 });
     }
   });
-  setInterval(() => { if (player.potatoSwitchCd > 0) player.potatoSwitchCd -= 0.1; }, 100);
 
-  // Способности Картошки
-  let potatoC_Cd = 0, potatoF_Cd = 0, potatoT_Cd = 0;
+  // --- 7. МЕХАНИКА: ЛКМ (Основные атаки) ---
+  let potatoCombo = 0, potatoComboTimer = 0;
+  window.addEventListener('mousedown', e => {
+    if (e.button !== 0 || player.character !== 'potato' || player.isDead) return;
+    if (typeof isLabOpen !== 'undefined' && isLabOpen) return;
+    
+    potatoCombo++;
+    if (potatoCombo > (player.potatoForm === 1 ? 3 : 5)) potatoCombo = 1;
+    potatoComboTimer = 1.5; 
+
+    const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
+    const dmgBase = (player.potatoForm === 1) ? 60 : 35;
+    const isFinisher = (player.potatoForm === 1 && potatoCombo === 3) || (player.potatoForm === 2 && potatoCombo === 5);
+
+    if (typeof SoundFX !== 'undefined') SoundFX.whip();
+
+    for (let i = 0; i < enemies.length; i++) {
+      const en = enemies[i];
+      const toE = en.group.position.clone().sub(player.pos);
+      if (toE.length() < 5.5 && toE.clone().normalize().dot(fwd) > 0.5) {
+        let dmg = dmgBase;
+        if (isFinisher) dmg *= 2.5; 
+        if (typeof damageEnemy === 'function') damageEnemy(en, dmg, fwd.clone().multiplyScalar(10), isFinisher ? '*ТЯЖЕЛЫЙ УДАР!*' : '');
+        
+        if (player.potatoForm === 1 && potatoCombo === 3) {
+            if (typeof spawnGroundCrackRing === 'function') spawnGroundCrackRing(en.group.position, 0x8B4513, 6);
+            en.vel.y = 15; 
+        }
+        if (player.potatoForm === 2 && potatoCombo === 5) {
+            if (typeof spawnParticles === 'function') spawnParticles(en.group.position.clone().add(new THREE.Vector3(0,1,0)), 0xFF2200, 25);
+        }
+      }
+    }
+    
+    if (window.__MP && window.__MP.room && window.__MP.remotes) {
+        window.__MP.remotes.forEach((r, id) => {
+            const toP = r.group.position.clone().sub(player.pos);
+            if (toP.length() < 5.5 && toP.clone().normalize().dot(fwd) > 0.5) {
+                let dmg = dmgBase;
+                if (isFinisher) dmg *= 2.5;
+                window.__MP.room.send('pvp', { targetId: id, damage: dmg });
+            }
+        });
+    }
+    
+    if (player.mesh) { player.mesh.userData.attackAnim = 1; }
+    if (typeof spawnSlashArc === 'function') spawnSlashArc(player.pos.clone().add(new THREE.Vector3(0, 2, 0)), player.camYaw, 0, player.potatoForm === 1 ? 0x8B4513 : 0xFF2200, 5.5, 0.3);
+  });
+
+  setInterval(() => { if (potatoComboTimer > 0) { potatoComboTimer -= 0.1; if (potatoComboTimer <= 0) potatoCombo = 0; } }, 100);
+
+  // --- 8. МЕХАНИКА: Q (Прыжок Молотом / Томатная Нова) ---
   window.addEventListener('keydown', e => {
-    if (player.character !== 'potato' || player.isDead) return;
+    if (e.code !== 'KeyQ' || player.character !== 'potato') return;
+    if (player.potatoQCd > 0) return;
+    player.potatoQCd = (player.potatoForm === 1) ? 4.0 : 5.0;
 
-    if (e.code === 'KeyC') {
-      if (potatoC_Cd > 0) return;
-      if (player.potatoForm === 1) {
-        potatoC_Cd = 10;
-        player.hp = Math.min(player.maxHp, player.hp + 250);
-        player.rooted = 1.0; 
-        player._potatoArmor = 4.0; 
-        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ПИТАНИЕ КОРНЕЙ (+250 HP)', '#2ecc71');
-        if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'potato_heal' });
-      } else {
-        potatoC_Cd = 12;
-        player._tomatoRage = 6.0;
-        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ИСПЫТАНИЕ ПЛАМЕНЕМ (ЯРОСТЬ 6с)', '#ff4400');
-        if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'tomato_rage' });
-      }
-    }
-
-    if (e.code === 'KeyF') {
-      if (potatoF_Cd > 0) return;
-      if (player.potatoForm === 1) {
-        potatoF_Cd = 6;
-        const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
-        player.vel.add(fwd.multiplyScalar(150));
-        if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'potato_ram', radius: 10 });
-      } else {
-        potatoF_Cd = 3;
-        if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'tomato_sauce', radius: 15 });
-      }
-    }
-
-    if (e.code === 'KeyT' && player.potatoForm === 2) {
-      if (potatoT_Cd > 0) return;
-      potatoT_Cd = 30;
-      let bestEnemy = null, bestDist = 9999;
-      for(let i=0; i<enemies.length; i++) {
-          let d = player.pos.distanceTo(enemies[i].group.position);
-          if(d < bestDist) { bestDist = d; bestEnemy = enemies[i]; }
-      }
-      if (bestEnemy) {
-        player.pos.copy(bestEnemy.group.position).add(new THREE.Vector3(0, 0, 3));
-        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ТОМАТНЫЙ ПОРТАЛ!', '#ff0055');
-      } else {
-        potatoT_Cd = 0; 
-      }
-    }
-
-    if (e.code === 'KeyQ') {
-        if (player.potatoForm === 1) {
-            if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'potato_slam', radius: 12 });
-        } else {
-            if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'tomato_nova', radius: 12 });
+    if (player.potatoForm === 1) {
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ГРОМОВОЙ МОЛОТ!', '#8B4513');
+        player.vel.y = 20; 
+        setTimeout(() => {
+            player.vel.y = -80; 
+            setTimeout(() => {
+                if (typeof spawnGroundCrackRing === 'function') spawnGroundCrackRing(player.pos, 0x8B4513, 15);
+                if (typeof window.__MP !== 'undefined' && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'potato_slam', radius: 12, dmg: 250 });
+                for (let i = 0; i < enemies.length; i++) {
+                    if (enemies[i].group.position.distanceTo(player.pos) < 12) {
+                        if (typeof damageEnemy === 'function') damageEnemy(enemies[i], 250, new THREE.Vector3(), '*ЗЕМЛЕТРЯСЕНИЕ!*');
+                        enemies[i].vel.y = 10;
+                    }
+                }
+            }, 300);
+        }, 400);
+    } else {
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'СВЕРХНОВА!', '#FF2200');
+        if (typeof spawnParticles === 'function') spawnParticles(player.pos.clone().add(new THREE.Vector3(0,2,0)), 0xFF2200, 40);
+        if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'tomato_nova', radius: 12, dmg: 300 });
+        for (let i = 0; i < enemies.length; i++) {
+            if (enemies[i].group.position.distanceTo(player.pos) < 12) {
+                if (typeof damageEnemy === 'function') damageEnemy(enemies[i], 300, new THREE.Vector3(), '*ВЗРЫВ!*');
+            }
         }
     }
   });
+  setInterval(() => { if (player.potatoQCd > 0) player.potatoQCd -= 0.1; }, 100);
 
+  // --- 9. МЕХАНИКА: C (Питание Корней / Ярость) ---
+  window.addEventListener('keydown', e => {
+    if (e.code !== 'KeyC' || player.character !== 'potato') return;
+    if (player.potatoCCd > 0) return;
+    
+    if (player.potatoForm === 1) {
+        player.potatoCCd = 10;
+        player.hp = Math.min(player.maxHp, player.hp + 250);
+        player.rooted = 1.0; player._potatoArmor = 4.0;
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ПИТАНИЕ КОРНЕЙ (+250HP, БРОНЯ)', '#2ecc71');
+        if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'potato_heal' });
+    } else {
+        player.potatoCCd = 12;
+        player._tomatoRage = 6.0;
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ИСПЫТАНИЕ ПЛАМЕНЕМ (ЯРОСТЬ)', '#ff4400');
+        if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'tomato_rage' });
+    }
+  });
+  setInterval(() => { if (player.potatoCCd > 0) player.potatoCCd -= 0.1; }, 100);
+
+  // --- 10. МЕХАНИКА: F (Таран / Стрим соуса) ---
+  window.addEventListener('keydown', e => {
+    if (e.code !== 'KeyF' || player.character !== 'potato') return;
+    if (player.potatoFCd > 0) return;
+
+    if (player.potatoForm === 1) {
+        player.potatoFCd = 6;
+        const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
+        player.vel.add(fwd.multiplyScalar(150));
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,2,0)), 'ТАРАН!', '#8B4513');
+        if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'potato_ram', radius: 10 });
+    } else {
+        player.potatoFCd = 3;
+        const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
+        for (let i = 1; i < 15; i++) {
+            setTimeout(() => {
+                if (typeof spawnParticles === 'function') spawnParticles(player.pos.clone().add(fwd.clone().multiplyScalar(i)), 0xcc0000, 5);
+                for (let j = 0; j < enemies.length; j++) {
+                    if (enemies[j].group.position.distanceTo(player.pos.clone().add(fwd.clone().multiplyScalar(i))) < 3) {
+                        if (typeof damageEnemy === 'function') damageEnemy(enemies[j], 20, fwd.clone(), '*СОУС!*');
+                    }
+                }
+            }, i * 30);
+        }
+        if (window.__MP && window.__MP.room) window.__MP.room.send('pvp_ability', { type: 'tomato_sauce', radius: 15 });
+    }
+  });
+  setInterval(() => { if (player.potatoFCd > 0) player.potatoFCd -= 0.1; }, 100);
+
+  // --- 11. МЕХАНИКА: T (Томатный портал) ---
+  window.addEventListener('keydown', e => {
+    if (e.code !== 'KeyT' || player.character !== 'potato' || player.potatoForm !== 2) return;
+    if (player.potatoTCd > 0) return;
+    player.potatoTCd = 30;
+
+    let bestE = null, bestD = 9999;
+    for (let i = 0; i < enemies.length; i++) {
+        let d = player.pos.distanceTo(enemies[i].group.position);
+        if (d < bestD) { bestD = d; bestE = enemies[i]; }
+    }
+    if (bestE) {
+        player.pos.copy(bestE.group.position).add(new THREE.Vector3(0, 0, 3));
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'ТОМАТНЫЙ ПОРТАЛ!', '#FF2200');
+        if (typeof SoundFX !== 'undefined') SoundFX.teleport();
+    } else {
+        if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'НЕТ ЦЕЛЕЙ!', '#888888');
+        player.potatoTCd = 0; 
+    }
+  });
+  setInterval(() => { if (player.potatoTCd > 0) player.potatoTCd -= 0.1; }, 100);
+
+  // Защита от красного оверлея в меню
   setInterval(() => { 
-    if (potatoC_Cd > 0) potatoC_Cd -= 0.1; 
-    if (potatoF_Cd > 0) potatoF_Cd -= 0.1; 
-    if (potatoT_Cd > 0) potatoT_Cd -= 0.1; 
+    const ep = document.getElementById('exec-prompt'); 
+    const cs = document.getElementById('char-select'); 
+    if (ep && cs && cs.style.display !== 'none') ep.style.display = 'none'; 
   }, 100);
 
-  // Защита от красного оверлея
-  setInterval(() => {
-    const ep = document.getElementById('exec-prompt');
-    const cs = document.getElementById('char-select');
-    if (ep && cs && cs.style.display !== 'none') ep.style.display = 'none';
-  }, 100);
-
-  console.log("🍌 [PATCH v37] Готово. Все старые фиксы на месте + Моргенкартошка.");
+  console.log("🍌 [PATCH v39] Готово. Полный патч загружен. Формы на клавишах 1 и 2.");
 })();
