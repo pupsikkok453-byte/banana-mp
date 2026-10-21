@@ -1,9 +1,9 @@
 // =======================================================
-// BANANA INDUSTRIES - GLOBAL PATCH (v34)
-// Полная версия: + Моргенкартошка & Громтомат + Фиксы
+// BANANA INDUSTRIES - GLOBAL PATCH (v35)
+// Моргенкартошка & Громтомат (Исправленный скелет)
 // =======================================================
 (function() {
-  console.log("🍌 [PATCH] v34 — Моргенкартошка & Громтомат полностью интегрированы.");
+  console.log("🍌 [PATCH] v35 — Моргенкартошка & Громтомат (Стабильная версия).");
 
   // ═══ 1. Убираем кусты ═══
   if (typeof addProp === 'function') {
@@ -11,7 +11,7 @@
     window.addProp = function(x, z, type) { if (type === 'bush') return; _orig.apply(this, arguments); };
   }
 
-  // ═══ 2. УНИВЕРСАЛЬНЫЙ ФИКС НОГ МОРКОВИ (по bounding box) ═══
+  // ═══ 2. УНИВЕРСАЛЬНЫЙ ФИКС НОГ МОРКОВИ ═══
   function fixCarrotMeshGround() {
     if (!player || !player.mesh || !player.mesh.userData || !player.mesh.userData.isCarrot) return;
     try {
@@ -79,7 +79,7 @@
     }
   }, 1500);
 
-  // ═══ 5. ГЛАВНЫЙ ХУК: враги не толкают на здании + сброс гибкости + щит ═══
+  // ═══ 5. ХУК: враги не толкают на здании + сброс гибкости + щит ═══
   if (typeof updatePlayerChoreographyAndCamera === 'function') {
     const _origChoreo = updatePlayerChoreographyAndCamera;
     window.updatePlayerChoreographyAndCamera = function(dt, now) {
@@ -133,14 +133,12 @@
     };
   }
 
-  // ═══ 6. Усиленный щит ═══
+  // ═══ 6. Усиленный щит / Броня Моргена ═══
   const origDamageToHero = window.applyDamageToHero;
   window.applyDamageToHero = function(dmg) {
-    // Броня Моргена
     if (player.character === 'potato' && player.potatoForm === 1 && player._potatoArmor > 0) {
       dmg = Math.floor(dmg * 0.5); 
     }
-    // Щит Банана
     if (player.activeModeF && player.suitIdx === 3 && player.character === 'banana' && !PEPPER_MODE && !CARROT_MODE && !LEMON_MODE) {
       const drain = dmg * 1.5;
       if (player.en >= drain) {
@@ -213,7 +211,7 @@
     };
   }
 
-  // ═══ 8. ★ ГАРПУН (carrotVineHarpoon) — КД 0.6с, не тратится при промахе ═══
+  // ═══ 8. ГАРПУН (carrotVineHarpoon) — КД 0.6с ═══
   let _newVineCd = 0;
   const VINE_CD = 0.6;
 
@@ -301,7 +299,7 @@
 
   setInterval(() => { if (_newVineCd > 0) _newVineCd = Math.max(0, _newVineCd - 0.1); }, 100);
 
-  // ═══ 9. C — Заморозка радиус 15м + локальный урон (для Банана) ═══
+  // ═══ 9. C — Заморозка (Банан) ═══
   const FREEZE_RADIUS = 15; const FREEZE_DMG = 20;
   window.addEventListener('keydown', function(e) {
     if (e.code !== 'KeyC') return;
@@ -378,7 +376,7 @@
       document.getElementById('t-bar').style.width = Math.min(100, (tHoldTimer / 5) * 100) + '%';
       if (tHoldTimer >= 5) {
         tCharging = false; tPanel.style.display = 'none'; 
-        nanoUltCd = 102.5; // ★ КД увеличен на 2.5 секунды
+        nanoUltCd = 102.5; // ★ Увеличенный КД
         
         const beam = new THREE.Mesh(new THREE.CylinderGeometry(2, 15, 40, 16), new THREE.MeshBasicMaterial({ color: 0x00f2fe, transparent: true, opacity: 0.7, wireframe: true }));
         beam.rotation.x = Math.PI / 2;
@@ -414,7 +412,7 @@
     };
   }
 
-  // ═══ 12. F-СПОСОБНОСТИ (разделение Моркови) ═══
+  // ═══ 12. F-СПОСОБНОСТИ ═══
   player._suitCdMap = player._suitCdMap || [0,0,0,0,0];
   const origTriggerF = window.triggerUniqueAbilityF;
   window.triggerUniqueAbilityF = function() {
@@ -502,88 +500,144 @@
   }
 
   // ══════════════════════════════════════════════════════════
-  // ═══ 16. ★ НОВЫЙ ПЕРСОНАЖ: МОРГЕНКАРТОШКА & ГРОМТОМАТ ═══
+  // ═══ 16. ★ МОРГЕНКАРТОШКА & ГРОМТОМАТ (ИСПРАВЛЕНО) ═══
   // ══════════════════════════════════════════════════════════
   
-  // --- 3D-модели ---
+  // Создаем модель с ПРАВИЛЬНЫМ скелетом (userData), чтобы игра не ломалась
   window.createPotatoMesh = function(form) {
     var g = new THREE.Group();
-    g.userData = { legL: {}, legR: {}, armR: {}, spine: new THREE.Object3D() };
-    g.add(g.userData.spine);
+    
+    // Создаем каркас, идентичный стандартным персонажам
+    var spine = new THREE.Object3D();
+    g.add(spine);
+    
+    var legL = new THREE.Group();
+    var legL_hip = new THREE.Group();
+    var legL_knee = new THREE.Group();
+    legL.add(legL_hip);
+    legL_hip.add(legL_knee);
+    g.add(legL);
+    
+    var legR = new THREE.Group();
+    var legR_hip = new THREE.Group();
+    var legR_knee = new THREE.Group();
+    legR.add(legR_hip);
+    legR_hip.add(legR_knee);
+    g.add(legR);
+    
+    var armR = new THREE.Group();
+    var armR_shoulder = new THREE.Group();
+    armR.add(armR_shoulder);
+    g.add(armR);
+    
+    // Привязываем userData, чтобы игра знала, как анимировать
+    g.userData = {
+        legL: { pivot: legL, hip: legL_hip, knee: legL_knee },
+        legR: { pivot: legR, hip: legR_hip, knee: legR_knee },
+        armR: { pivot: armR, shoulder: armR_shoulder },
+        armL: null,
+        spine: spine
+    };
 
     if (form === 1) {
-      // МОРГЕН (Тяжелый танк)
-      var body = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 1.6, 8), new THREE.MeshStandardMaterial({color: 0x8B0000}));
-      body.position.y = 1.6; g.add(body);
-      var belly = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C}));
-      belly.position.set(0, 1.4, 0.5); belly.scale.set(1, 0.8, 0.5); g.add(belly);
-      var head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C}));
-      head.position.y = 2.9; g.add(head);
-      var beard = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.6, 6), new THREE.MeshStandardMaterial({color: 0x3E2723}));
-      beard.position.set(0, 2.6, 0.3); beard.rotation.x = Math.PI; g.add(beard);
-      
-      var hammerGroup = new THREE.Group();
-      var handle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.5, 6), new THREE.MeshStandardMaterial({color: 0x5D4037}));
-      handle.rotation.z = Math.PI / 2; hammerGroup.add(handle);
-      var hammerHead = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.5), new THREE.MeshStandardMaterial({color: 0x9E9E9E}));
-      hammerHead.position.x = 0.7; hammerGroup.add(hammerHead);
-      hammerGroup.position.set(1.0, 2.0, 0); hammerGroup.rotation.z = -0.5; g.add(hammerGroup);
-      
-      var legL = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x424242}));
-      legL.position.set(-0.3, 0.5, 0); g.add(legL); g.userData.legL.pivot = legL;
-      var legR = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x424242}));
-      legR.position.set(0.3, 0.5, 0); g.add(legR); g.userData.legR.pivot = legR;
-      
-      var armR = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.2, 6), new THREE.MeshStandardMaterial({color: 0x8B0000}));
-      armR.position.set(0.9, 2.0, 0); armR.rotation.z = -0.3; g.add(armR); 
-      g.userData.armR.pivot = armR; g.userData.armR.shoulder = armR;
-
+        // МОРГЕН (Танк)
+        var body = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 1.6, 8), new THREE.MeshStandardMaterial({color: 0x8B0000}));
+        body.position.y = 1.6; spine.add(body);
+        
+        var belly = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C}));
+        belly.position.set(0, 1.4, 0.5); belly.scale.set(1, 0.8, 0.5); spine.add(belly);
+        
+        var head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C}));
+        head.position.y = 2.9; spine.add(head);
+        
+        var beard = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.6, 6), new THREE.MeshStandardMaterial({color: 0x3E2723}));
+        beard.position.set(0, 2.6, 0.3); beard.rotation.x = Math.PI; spine.add(beard);
+        
+        var hammerGroup = new THREE.Group();
+        var handle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.5, 6), new THREE.MeshStandardMaterial({color: 0x5D4037}));
+        handle.rotation.z = Math.PI / 2; hammerGroup.add(handle);
+        var hammerHead = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.5), new THREE.MeshStandardMaterial({color: 0x9E9E9E}));
+        hammerHead.position.x = 0.7; hammerGroup.add(hammerHead);
+        hammerGroup.position.set(0.5, -0.6, 0); // Относительно плеча
+        armR_shoulder.add(hammerGroup);
+        
+        var armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.2, 6), new THREE.MeshStandardMaterial({color: 0x8B0000}));
+        armRMesh.position.y = -0.6; armR_shoulder.add(armRMesh);
+        
+        var legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x424242}));
+        legLMesh.position.y = -0.5; legL_hip.add(legLMesh);
+        var legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 1.0, 6), new THREE.MeshStandardMaterial({color: 0x424242}));
+        legRMesh.position.y = -0.5; legR_hip.add(legRMesh);
+        
+        legL.position.set(-0.3, 1.0, 0);
+        legR.position.set(0.3, 1.0, 0);
+        armR.position.set(0.9, 2.0, 0);
+        armR_shoulder.rotation.z = -0.3;
+        
     } else {
-      // ГРОМТОМАТ (Огненный дамагер)
-      var body = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 12), new THREE.MeshStandardMaterial({color: 0xFF0000}));
-      body.position.y = 1.4; body.scale.set(1.1, 1.2, 0.9); g.add(body);
-      var head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 12), new THREE.MeshStandardMaterial({color: 0xFF2200}));
-      head.position.y = 2.6; g.add(head);
-      var eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
-      eyeL.position.set(-0.2, 2.7, 0.5); g.add(eyeL);
-      var eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
-      eyeR.position.set(0.2, 2.7, 0.5); g.add(eyeR);
-      var pupilL = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({color: 0x000000}));
-      pupilL.position.set(-0.2, 2.7, 0.63); g.add(pupilL);
-      var pupilR = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({color: 0x000000}));
-      pupilR.position.set(0.2, 2.7, 0.63); g.add(pupilR);
-      var armL = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshStandardMaterial({color: 0x00FF00}));
-      armL.position.set(-0.9, 1.6, 0.4); g.add(armL);
-      var armR = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshStandardMaterial({color: 0x00FF00}));
-      armR.position.set(0.9, 1.6, 0.4); g.add(armR); 
-      g.userData.armR.pivot = armR; g.userData.armR.shoulder = armR;
-      var legL = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.8, 6), new THREE.MeshStandardMaterial({color: 0x0000FF}));
-      legL.position.set(-0.3, 0.4, 0); g.add(legL); g.userData.legL.pivot = legL;
-      var legR = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.8, 6), new THREE.MeshStandardMaterial({color: 0x0000FF}));
-      legR.position.set(0.3, 0.4, 0); g.add(legR); g.userData.legR.pivot = legR;
+        // ГРОМТОМАТ (Дамагер)
+        var body = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 12), new THREE.MeshStandardMaterial({color: 0xFF0000}));
+        body.position.y = 1.4; body.scale.set(1.1, 1.2, 0.9); spine.add(body);
+        
+        var head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 12), new THREE.MeshStandardMaterial({color: 0xFF2200}));
+        head.position.y = 2.6; spine.add(head);
+        
+        var eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
+        eyeL.position.set(-0.2, 2.7, 0.5); spine.add(eyeL);
+        var eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
+        eyeR.position.set(0.2, 2.7, 0.5); spine.add(eyeR);
+        
+        var pupilL = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({color: 0x000000}));
+        pupilL.position.set(-0.2, 2.7, 0.63); spine.add(pupilL);
+        var pupilR = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({color: 0x000000}));
+        pupilR.position.set(0.2, 2.7, 0.63); spine.add(pupilR);
+        
+        var armRMesh = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshStandardMaterial({color: 0x00FF00}));
+        armRMesh.position.y = -0.5; armR_shoulder.add(armRMesh);
+        
+        var armLMesh = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshStandardMaterial({color: 0x00FF00}));
+        armLMesh.position.set(-0.9, 1.6, 0.4); spine.add(armLMesh);
+        
+        var legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.8, 6), new THREE.MeshStandardMaterial({color: 0x0000FF}));
+        legLMesh.position.y = -0.4; legL_hip.add(legLMesh);
+        var legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.8, 6), new THREE.MeshStandardMaterial({color: 0x0000FF}));
+        legRMesh.position.y = -0.4; legR_hip.add(legRMesh);
+        
+        legL.position.set(-0.3, 0.8, 0);
+        legR.position.set(0.3, 0.8, 0);
+        armR.position.set(0.9, 1.6, 0.4);
     }
     return g;
   };
 
-  // --- Хук пересоздания меша ---
-  const _origRebuildPotato = window.rebuildHeroMesh;
+  // Хук пересоздания меша (скрываем банана, добавляем картошку)
+  const _origRebuildHeroMeshWithPatch = window.rebuildHeroMesh;
   window.rebuildHeroMesh = function() {
+    if (_origRebuildHeroMeshWithPatch) _origRebuildHeroMeshWithPatch.apply(this, arguments);
+    
     if (typeof player !== 'undefined' && player.character === 'potato') {
-      console.log('[POTATO] rebuildHeroMesh: создаю меш, форма', player.potatoForm);
-      if (player.mesh && playerGroup) {
-        playerGroup.remove(player.mesh);
-        player.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+      if (player.mesh) player.mesh.visible = false;
+      
+      if (window.__potatoMesh && window.__potatoMesh.parent) {
+        window.__potatoMesh.parent.remove(window.__potatoMesh);
+        window.__potatoMesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
       }
-      const m = window.createPotatoMesh(player.potatoForm || 1);
-      player.mesh = m;
-      if (playerGroup) playerGroup.add(m);
-      else console.error('[POTATO] playerGroup не найден!');
+      
+      const pm = window.createPotatoMesh(player.potatoForm || 1);
+      window.__potatoMesh = pm;
+      if (playerGroup) playerGroup.add(pm);
+      console.log('[POTATO] Меш создан. Форма:', player.potatoForm);
     } else {
-      if (_origRebuildPotato) _origRebuildPotato.apply(this, arguments);
+      if (player.mesh) player.mesh.visible = true;
+      if (window.__potatoMesh && window.__potatoMesh.parent) {
+        window.__potatoMesh.parent.remove(window.__potatoMesh);
+        window.__potatoMesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        window.__potatoMesh = null;
+      }
     }
   };
 
-  // --- Установка персонажа ---
+  // Выбор персонажа
   window.equipPotato = function() {
     console.log('[POTATO] Выбор персонажа');
     if (typeof equipBanana === 'function') equipBanana();
@@ -594,7 +648,6 @@
       player.potatoForm = 1;
       player.maxHp = 800;
       player.hp = 800;
-      PEPPER_MODE = false; CARROT_MODE = false; LEMON_MODE = false;
       
       if (typeof window.rebuildHeroMesh === 'function') window.rebuildHeroMesh();
       if (typeof updateHUD === 'function') updateHUD();
@@ -606,7 +659,7 @@
     }, 150);
   };
 
-  // --- Кнопка в меню ---
+  // Кнопка в меню
   setInterval(() => {
     const cs = document.getElementById('char-select');
     if (cs && !document.getElementById('btn-potato')) {
@@ -622,7 +675,7 @@
     }
   }, 500);
 
-  // --- Смена формы (R) ---
+  // Смена формы (R)
   window.addEventListener('keydown', e => {
     if (e.code === 'KeyR' && player.character === 'potato') {
       if (player.potatoSwitchCd > 0) return;
@@ -640,7 +693,7 @@
   });
   setInterval(() => { if (player.potatoSwitchCd > 0) player.potatoSwitchCd -= 0.1; }, 100);
 
-  // --- Способности Картошки ---
+  // Способности Картошки
   let potatoC_Cd = 0, potatoF_Cd = 0, potatoT_Cd = 0;
   window.addEventListener('keydown', e => {
     if (player.character !== 'potato' || player.isDead) return;
@@ -716,5 +769,5 @@
     if (potatoT_Cd > 0) potatoT_Cd -= 0.1; 
   }, 100);
 
-  console.log("🍌 [PATCH v34] Готово.");
+  console.log("🍌 [PATCH v35] Готово. Моргенкартошка стабильна.");
 })();
