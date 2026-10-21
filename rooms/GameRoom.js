@@ -44,14 +44,20 @@ const PVP_ABILITIES = {
   fire_beam: { radius: 36, dmg: 100, cd: 2000 }, fire_fist: { radius: 7,  dmg: 45, cd: 400 },
   rocket: { radius: 10, dmg: 90, cd: 1500 }, kamikaze_spider: { radius: 10, dmg: 80, cd: 5000 },
   freeze: { radius: 15, dmg: 20, cd: 3000 },
-  nano_ult: { radius: 50, dmg: 1500, cd: 100000 }, // ★ УСИЛЕНА УЛЬТА ЕГОРА (было 600)
   
-  // ★ НОВЫЕ СПОСОБНОСТИ: МОРГЕНКАРТОШКА & ГРОМТОМАТ
-  potato_slam:   { radius: 12, dmg: 200, cd: 4000 },
-  tomato_nova:   { radius: 12, dmg: 220, cd: 4500 },
-  potato_ram:    { radius: 10, dmg: 120, cd: 6000 },
-  tomato_sauce:  { radius: 15, dmg: 80, cd: 3000 },
-  potato_electric_slam: { radius: 15, dmg: 300, cd: 5000 } // Усиленный слэм после формы томата
+  // ★ УСИЛЕНА УЛЬТА ЕГОРА: было 1500, стало 4000 (должна убивать врагов)
+  nano_ult: { radius: 50, dmg: 4000, cd: 102500 }, // КД увеличен на 2.5 сек (100с + 2.5с)
+  
+  // ★ СПОСОБНОСТИ МОРГЕНКАРТОШКИ (Форма 1)
+  potato_slam:   { radius: 12, dmg: 250, cd: 4000 },
+  potato_heal:   { radius: 0,  dmg: 0,   cd: 10000 }, // Лечение
+  potato_ram:    { radius: 10, dmg: 150, cd: 6000 },
+  
+  // ★ СПОСОБНОСТИ ГРОМТОМАТА (Форма 2)
+  tomato_nova:   { radius: 12, dmg: 300, cd: 5000 },
+  tomato_rage:   { radius: 0,  dmg: 0,   cd: 12000 }, // Ярость
+  tomato_sauce:  { radius: 15, dmg: 100, cd: 3000 },
+  potato_electric_slam: { radius: 15, dmg: 350, cd: 5000 } 
 };
 
 const ENEMY_TYPES = {
@@ -119,7 +125,7 @@ class GameRoom extends colyseus.Room {
       
       if (p.char === 'carrot') p.maxHp = (p.carrotForm === 2) ? 800 : 480;
       else if (p.char === 'banana') p.maxHp = [350, 420, 600, 450, 500][p.suit] || 500;
-      else if (p.char === 'potato') p.maxHp = (p.potatoForm === 1) ? 700 : 550; // Танк / Дамагер
+      else if (p.char === 'potato') p.maxHp = (p.potatoForm === 1) ? 800 : 600; // Танк / Дамагер
       if (p.hp > p.maxHp) p.hp = p.maxHp;
     });
 
@@ -139,8 +145,8 @@ class GameRoom extends colyseus.Room {
         if (!hit || !hit.id) return;
         const enemy = this.state.enemies.get(hit.id);
         if (!enemy) return;
-        if (distXZ(attacker, enemy) > Math.pow(20, 2) || dyAbs(attacker, enemy) > 40) return;
-        enemy.hp -= clamp(num(hit.dmg, 0), 1, 5000);
+        if (distXZ(attacker, enemy) > Math.pow(25, 2) || dyAbs(attacker, enemy) > 40) return;
+        enemy.hp -= clamp(num(hit.dmg, 0), 1, 8000);
         this.lastHitBy.set(hit.id, client.sessionId);
         this.broadcast('dmg', { enemyId: hit.id, amount: hit.dmg, crit: !!hit.crit });
         if (enemy.hp <= 0) this.killEnemy(hit.id);
@@ -153,30 +159,40 @@ class GameRoom extends colyseus.Room {
       if (!atk || atk.dead) return;
       const def = PVP_ABILITIES[d.type];
       if (!def) return;
+      
       if (d.type === 'kamikaze_spider' && atk.char !== 'lemon') return;
-      if ((d.type === 'potato_slam' || d.type === 'potato_ram' || d.type === 'potato_electric_slam') && atk.char !== 'potato') return;
-      if ((d.type === 'tomato_nova' || d.type === 'tomato_sauce') && atk.char !== 'potato') return;
+      if ((d.type === 'potato_slam' || d.type === 'potato_ram' || d.type === 'potato_heal') && atk.char !== 'potato') return;
+      if ((d.type === 'tomato_nova' || d.type === 'tomato_sauce' || d.type === 'tomato_rage' || d.type === 'potato_electric_slam') && atk.char !== 'potato') return;
+      if (d.type === 'nano_ult' && atk.suit !== 4 && atk.char !== 'banana') return; // Только для Егора
 
       const key = 'pva_' + client.sessionId + '_' + d.type;
       if (Date.now() - (this.playerAttackCd.get(key) || 0) < def.cd) return;
       this.playerAttackCd.set(key, Date.now());
       const radius = def.radius, dmg = def.dmg;
 
+      // PvP урон по игрокам
       this.state.players.forEach((tgt, sid) => {
         if (tgt === atk || tgt.dead) return;
         if (Math.sqrt(distXZ(atk, tgt)) > radius || dyAbs(atk, tgt) > 15) return;
-        tgt.hp -= dmg;
-        if (d.type === 'root_bind') { tgt.rooted = Math.max(tgt.rooted || 0, 2.5); tgt.y = 0; }
-        if (d.type === 'freeze') tgt.frozen = Math.max(tgt.frozen || 0, 3.0);
-        this.broadcast('pvp_hit', { attacker: atk.name, target: tgt.name, targetId: sid, damage: dmg, ability: d.type });
-        if (tgt.hp <= 0 && !tgt.dead) {
-          tgt.dead = true; tgt.hp = 0; tgt.respawnTimer = 6; tgt.rooted = 0; tgt.frozen = 0;
-          tgt.deaths++; atk.kills++; atk.score += 300;
-          this.broadcast('pvp_kill', { killer: atk.name, victim: tgt.name });
-          this.broadcast('kill_feed', { killer: atk.name, victim: tgt.name, isPvp: true, ability: d.type });
+        
+        if (dmg > 0) tgt.hp -= dmg;
+        
+        if (d.type === 'potato_heal') { atk.hp = Math.min(atk.maxHp, atk.hp + 200); return; }
+        if (d.type === 'potato_slam' || d.type === 'tomato_nova') tgt.rooted = Math.max(tgt.rooted || 0, 1.5);
+        if (d.type === 'tomato_rage') atk._tomatoRage = 6.0; // Логика обрабатывается на клиенте, тут просто триггер
+
+        if (dmg > 0) {
+          this.broadcast('pvp_hit', { attacker: atk.name, target: tgt.name, targetId: sid, damage: dmg, ability: d.type });
+          if (tgt.hp <= 0 && !tgt.dead) {
+            tgt.dead = true; tgt.hp = 0; tgt.respawnTimer = 6; tgt.rooted = 0; tgt.frozen = 0;
+            tgt.deaths++; atk.kills++; atk.score += 300;
+            this.broadcast('pvp_kill', { killer: atk.name, victim: tgt.name });
+            this.broadcast('kill_feed', { killer: atk.name, victim: tgt.name, isPvp: true, ability: d.type });
+          }
         }
       });
 
+      // Урон по врагам
       this.state.enemies.forEach((en, eid) => {
         const dx = en.x - atk.x; const dz = en.z - atk.z;
         const dist = Math.sqrt(dx*dx + dz*dz);
@@ -188,21 +204,20 @@ class GameRoom extends colyseus.Room {
             this.broadcast('dmg', { enemyId: eid, amount: dmg, crit: true });
             if (en.hp <= 0) this.killEnemy(eid);
           }
-        } else if (d.type === 'freeze' || d.type === 'root_bind' || d.type === 'earthquake' || d.type === 'carrot_ult' || d.type === 'hell_explosion' || d.type === 'potato_slam' || d.type === 'tomato_nova' || d.type === 'potato_ram' || d.type === 'tomato_sauce' || d.type === 'potato_electric_slam') {
-          if (dist <= radius) {
-            en.hp -= dmg;
-            if (d.type === 'freeze') en.frozen = Math.max(en.frozen || 0, 3.0);
-            if (d.type === 'root_bind' && en.y > 0) { en.y = 0; en.anim = 0; }
-            this.lastHitBy.set(eid, client.sessionId);
-            this.broadcast('dmg', { enemyId: eid, amount: dmg, crit: false });
-            if (en.hp <= 0) this.killEnemy(eid);
-          }
+        } else if (dmg > 0 && dist <= radius && dyAbs(atk, en) <= 15) {
+          en.hp -= dmg;
+          if (d.type === 'freeze') en.frozen = Math.max(en.frozen || 0, 3.0);
+          if (d.type === 'root_bind' || d.type === 'potato_slam' || d.type === 'tomato_nova') { if (en.y > 0) { en.y = 0; en.anim = 0; } }
+          this.lastHitBy.set(eid, client.sessionId);
+          this.broadcast('dmg', { enemyId: eid, amount: dmg, crit: false });
+          if (en.hp <= 0) this.killEnemy(eid);
         }
       });
 
       this.broadcast('effect', { type: d.type, x: atk.x, y: atk.y, z: atk.z, bySession: client.sessionId, byName: atk.name, radius: radius }, { except: client });
     });
 
+    // ... (Остальные обработчики spawn_spiders, kamikaze_spiders, toggle_enemies, pvp остаются без изменений)
     this.onMessage('spawn_spiders', (client, d) => {
       const p = this.state.players.get(client.sessionId);
       if (!p || p.dead || p.char !== 'lemon') return;
@@ -244,7 +259,7 @@ class GameRoom extends colyseus.Room {
       else if (atk.char === 'carrot') dmg = (atk.carrotForm === 2) ? 80 : 45;
       else if (atk.char === 'lemon') dmg = 50;
       else if (atk.char === 'pepper') dmg = 45;
-      else if (atk.char === 'potato') dmg = (atk.potatoForm === 1) ? 75 : 50;
+      else if (atk.char === 'potato') dmg = (atk.potatoForm === 1) ? 85 : 55;
       tgt.hp -= dmg;
       this.broadcast('pvp_hit', { attacker: atk.name, target: tgt.name, targetId: d.targetId, damage: dmg });
       if (tgt.hp <= 0 && !tgt.dead) {
@@ -295,7 +310,7 @@ class GameRoom extends colyseus.Room {
     else if (p.char === 'pepper') p.maxHp = 420;
     else if (p.char === 'carrot') p.maxHp = 480;
     else if (p.char === 'lemon') p.maxHp = 400;
-    else if (p.char === 'potato') p.maxHp = 700;
+    else if (p.char === 'potato') p.maxHp = 800;
     p.hp = p.maxHp; p.dead = false; p.respawnTimer = 0; p.pepperEvolved = false; p.carrotForm = 1;
     p.potatoForm = 1;
     p.attackAnim = 0; p.score = 0; p.ep = 0; p.rooted = 0; p.frozen = 0; p.kills = 0; p.deaths = 0;
