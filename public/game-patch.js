@@ -1,9 +1,9 @@
 // =======================================================
-// BANANA INDUSTRIES - GLOBAL PATCH (v48)
-// ПОЛНАЯ ВЕРСИЯ: Все старые фиксы (v32) + Моргенкартошка (Скин)
+// BANANA INDUSTRIES - GLOBAL PATCH (v49)
+// ФИКС КНОПКИ: Моргенкартошка
 // =======================================================
 (function() {
-  console.log("🍌 [PATCH] v48 — Загружен стабильный патч. Картошка = скин Банана.");
+  console.log("🍌 [PATCH] v49 — Фикс кнопки. Она будет поверх всего.");
 
   // ═══ 1. Убираем кусты ═══
   if (typeof addProp === 'function') {
@@ -119,7 +119,6 @@
         if (player.en <= 0) { player.en = 0; player.activeModeF = false; if (player.mesh && player.mesh.userData.limeShield) player.mesh.userData.limeShield.visible = false; }
       }
 
-      // Анимация покоя только для не-картошки
       if (!player.isDead && player.attackTimer <= 0 && !player.isFlying && !player.isDodging && !player.isSliding && !player.isWallRunning && !isFrozen && !window.__POTATO_MODE) {
         const ud = player.mesh ? player.mesh.userData : null;
         if (ud && ud.spine) {
@@ -297,13 +296,12 @@
   if (typeof addRage === 'function') { const origAddRage = window.addRage; window.addRage = function(amount) { if (PEPPER_MODE) { if (typeof addSpiciness === 'function') addSpiciness(amount); return; } if (origAddRage) origAddRage.apply(this, arguments); }; }
 
   // ══════════════════════════════════════════════════════════
-  // ═══ 16. МОРГЕНКАРТОШКА (Безопасная интеграция) ═══
+  // ═══ 16. МОРГЕНКАРТОШКА (ФИКС КНОПКИ) ═══
   // ══════════════════════════════════════════════════════════
   
   window.__POTATO_MODE = false;
   window.__POTATO_FORM = 1;
 
-  // Модель (Морген и Громтомат)
   window.createPotatoMesh = function(form) {
     form = (form === 2) ? 2 : 1; 
     var g = new THREE.Group();
@@ -316,7 +314,6 @@
     g.userData = { legL: { pivot: legL, hip: legL_hip, knee: legL_knee }, legR: { pivot: legR, hip: legR_hip, knee: legR_knee }, armR: { pivot: armR, shoulder: armR_shoulder }, armL: { pivot: armL, shoulder: armL_shoulder }, spine: spine, attackAnim: 0 };
 
     if (form === 1) {
-        // Морген
         var body = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 1.6, 8), new THREE.MeshStandardMaterial({color: 0x8B0000})); body.position.y = 1.6; spine.add(body);
         var belly = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C})); belly.position.set(0, 1.3, 0.5); belly.scale.set(1, 0.9, 0.6); spine.add(belly);
         var head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshStandardMaterial({color: 0xD2B48C})); head.position.y = 2.8; spine.add(head);
@@ -333,7 +330,6 @@
         
         legL.position.set(-0.3, 1.0, 0); legR.position.set(0.3, 1.0, 0); armR.position.set(1.0, 2.0, 0); armR_shoulder.rotation.z = -0.4;
     } else {
-        // Громтомат
         var body = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 1.5, 10), new THREE.MeshStandardMaterial({color: 0x4a0010})); body.position.y = 1.5; spine.add(body);
         var belly = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 10), new THREE.MeshStandardMaterial({color: 0xFF2200})); belly.position.set(0, 1.2, 0.4); belly.scale.set(1.1, 0.9, 0.9); spine.add(belly);
         var head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 12), new THREE.MeshStandardMaterial({color: 0xFF0000})); head.position.y = 2.7; spine.add(head);
@@ -354,70 +350,113 @@
   };
 
   // Активация персонажа
-  window.activatePotato = function() {
-    console.log('[POTATO] Активация...');
-    // Находим и нажимаем кнопку Банана, чтобы движок запустил игру как обычно
-    const bananaBtn = document.querySelector('[onclick*="equipBanana"]');
-    if (bananaBtn) {
-      bananaBtn.click();
-    } else if (typeof equipBanana === 'function') {
-      equipBanana();
-    } else {
-      console.error('[POTATO] Кнопка Банана не найдена!');
-      return;
+  window.activatePotato = function(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    }
+    console.log('[POTATO] Клик по кнопке! Запуск...');
+    
+    // Ищем кнопку Банана и кликаем её
+    let bananaBtn = null;
+    const allBtns = document.querySelectorAll('button, div[onclick], [role="button"]');
+    for (let i = 0; i < allBtns.length; i++) {
+      const b = allBtns[i];
+      const txt = (b.innerText || b.textContent || '').toLowerCase();
+      const onclickStr = b.getAttribute('onclick') || '';
+      if (txt.includes('банан') || onclickStr.includes('equipBanana')) {
+        bananaBtn = b;
+        break;
+      }
     }
     
+    if (bananaBtn) {
+      console.log('[POTATO] Нажимаю кнопку Банана:', bananaBtn);
+      bananaBtn.click();
+    } else if (typeof equipBanana === 'function') {
+      console.log('[POTATO] Вызываю equipBanana() напрямую.');
+      equipBanana();
+    } else {
+      console.error('[POTATO] Не могу найти кнопку или функцию Банана!');
+      alert('Ошибка: не найдена кнопка Банана. Сообщите разработчику.');
+      return;
+    }
+
     setTimeout(() => {
       window.__POTATO_MODE = true;
       window.__POTATO_FORM = 1;
       
-      // Скрываем родную модель Банана
       if (player.mesh) player.mesh.visible = false;
-      
-      // Убираем Шрекича и костюмы
       if (typeof Companion !== 'undefined' && Companion.group) Companion.group.visible = false;
       const hotbar = document.getElementById('suit-hotbar'); if (hotbar) hotbar.style.display = 'none';
       const evo = document.getElementById('pepper-evo-panel'); if (evo) evo.style.display = 'none';
 
-      // Добавляем свою модель
       if (playerGroup) {
         if (window.__potatoMesh && window.__potatoMesh.parent) window.__potatoMesh.parent.remove(window.__potatoMesh);
         window.__potatoMesh = window.createPotatoMesh(1);
         playerGroup.add(window.__potatoMesh);
       }
       
-      // Синхронизация для МП (если сервер уже поддерживает 'potato')
       if (window.__MP && window.__MP.room) window.__MP.room.send('charState', { char: 'potato', potatoForm: 1 });
-      if (typeof spawnComicPop === 'function') spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'МОРГЕНКАРТОШКА', '#8B4513');
-      console.log('[POTATO] Готово.');
-    }, 300); // Ждем 300мс, чтобы игра успела запуститься
+      if (typeof spawnComicPop === 'function' && player.pos) spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,3,0)), 'МОРГЕНКАРТОШКА', '#8B4513');
+      console.log('[POTATO] Персонаж активирован.');
+    }, 300);
   };
 
-  // Вставка кнопки (раз в 500мс проверяем меню)
+  // УДАЛЯЕМ старую кнопку, если она была (для избежания дублей)
+  const oldBtn = document.getElementById('btn-potato');
+  if (oldBtn) oldBtn.remove();
+
+  // СОЗДАЕМ КНОПКУ СРАЗУ В BODY (поверх всего)
+  const potatoBtn = document.createElement('button');
+  potatoBtn.id = 'btn-potato';
+  potatoBtn.innerHTML = '🥔 ИГРАТЬ ЗА МОРГЕНКАРТОШКУ';
+  potatoBtn.style.cssText = `
+    position: fixed !important;
+    bottom: 30px !important;
+    right: 30px !important;
+    z-index: 2147483647 !important;
+    padding: 15px 30px !important;
+    background: linear-gradient(135deg, #8B4513, #D2691E) !important;
+    color: #fff !important;
+    font-size: 18px !important;
+    font-weight: bold !important;
+    border: 3px solid #FFD700 !important;
+    border-radius: 12px !important;
+    cursor: pointer !important;
+    box-shadow: 0 0 30px rgba(139,69,19,0.8) !important;
+    display: none;
+    pointer-events: auto !important;
+    user-select: none;
+    font-family: 'Bangers', Impact, sans-serif !important;
+    letter-spacing: 1px;
+  `;
+
+  // Обработчик клика с перехватом (capture: true)
+  potatoBtn.addEventListener('click', (e) => {
+    console.log('[POTATO] Click event сработал');
+    window.activatePotato(e);
+  }, true);
+
+  potatoBtn.addEventListener('mousedown', (e) => {
+    console.log('[POTATO] Mousedown event сработал');
+    window.activatePotato(e);
+  }, true);
+
+  document.body.appendChild(potatoBtn);
+
+  // Показ/скрытие кнопки в зависимости от меню
   setInterval(() => {
     const cs = document.getElementById('char-select');
-    if (cs && !document.getElementById('btn-potato') && cs.style.display !== 'none') {
-      const btn = document.createElement('button');
-      btn.id = 'btn-potato';
-      // Пытаемся скопировать стили с существующей кнопки
-      const ex = cs.querySelector('.char-btn, button');
-      if (ex) {
-        btn.style.cssText = ex.style.cssText;
-        btn.className = ex.className;
-      } else {
-        btn.style.cssText = 'padding:15px 30px; background:#8B4513; color:#fff; font-size:18px; font-weight:bold; border:none; cursor:pointer; border-radius:8px; margin:10px;';
-      }
-      btn.innerHTML = '🥔 Моргенкартошка';
-      btn.onclick = window.activatePotato;
-      
-      // Вставляем в конец меню
-      cs.appendChild(btn);
-      console.log('[POTATO] Кнопка добавлена в меню.');
-    } else if (cs && cs.style.display === 'none' && document.getElementById('btn-potato')) {
-      // Если меню закрыто, удаляем кнопку, чтобы не мешала
-      document.getElementById('btn-potato').remove();
+    const isMenuOpen = cs && cs.style.display !== 'none' && cs.style.display !== '';
+    
+    if (isMenuOpen) {
+      potatoBtn.style.display = 'block';
+    } else {
+      potatoBtn.style.display = 'none';
     }
-  }, 500);
+  }, 200);
 
   // Обновление меша (не дает модели исчезнуть)
   const _origRebuildP = window.rebuildHeroMesh;
@@ -467,7 +506,6 @@
     if (!window.__POTATO_MODE || player.isDead) return;
     const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
     
-    // ЛКМ
     if (e.button === 0) {
       if (window.__potatoMesh) window.__potatoMesh.userData.attackAnim = 1;
       let dmg = (window.__POTATO_FORM === 1) ? 60 : 35;
@@ -485,7 +523,6 @@
       }
     }
     
-    // ПКМ (Q)
     if (e.button === 2) {
       if (player.potatoQCd > 0) return;
       player.potatoQCd = (window.__POTATO_FORM === 1) ? 4 : 5;
@@ -541,5 +578,5 @@
     }
   });
 
-  console.log("🍌 [PATCH v48] Готово. Картошка - скин. Кнопка вставлена в меню.");
+  console.log("🍌 [PATCH v49] Готово. Кнопка добавлена в body. Проверь правый нижний угол.");
 })();
