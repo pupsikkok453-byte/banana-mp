@@ -1,4 +1,4 @@
-/* Banana Industries — Multiplayer Client v23 (Full) */
+/* Banana Industries — Multiplayer Client v24 (Potato Integration) */
 (function(){
 'use strict';
 
@@ -10,7 +10,7 @@ if (typeof buildings === 'undefined') { console.warn('[MP] buildings не опр
 
 var HOOKS14 = (window.__MP_HOOKS_V14 === 1);
 var HOOKS15 = (window.__MP_HOOKS_V15 === 1);
-console.log('[MP] v23 (Potato Update). hooks14=' + (HOOKS14?'OK':'MISSING') + ' hooks15=' + (HOOKS15?'OK':'MISSING'));
+console.log('[MP] v24. hooks14=' + (HOOKS14?'OK':'MISSING') + ' hooks15=' + (HOOKS15?'OK':'MISSING'));
 
 var BOSS_TYPES = { titan:1, lemon:1, valkyrie:1, necromancer:1 };
 var CDN_LIST = ['https://unpkg.com/colyseus.js@^0.14.0/dist/colyseus.js', 'https://cdn.jsdelivr.net/npm/colyseus.js@^0.14.0/dist/colyseus.js', '/colyseus.js'];
@@ -44,20 +44,25 @@ function flushHits(){
   try { MP.room.send('hit_batch', { hits: arr }); } catch(e){}
 }
 
+// ★ Fix: exec-prompt element
 if (!document.getElementById('exec-prompt')) {
   var _ep = document.createElement('div'); _ep.id = 'exec-prompt';
   _ep.style.cssText = 'position:fixed;top:58%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:30;display:none;background:rgba(255,0,85,.92);color:#fff;border:3px solid #000;outline:2px solid #fff200;padding:8px 18px;font-family:Bangers,Impact,sans-serif;font-size:24px;letter-spacing:1.5px;text-shadow:2px 2px 0 #000;';
   _ep.textContent = '[X] КАЗНЬ'; document.body.appendChild(_ep);
+  console.log('[MP] ✓ exec-prompt element создан');
 }
 
 var _origMpHit = window.__mpHit;
 window.__mpHit = function(id, dmg, crit, popText){
   if (!MP.room || !window.__MP_MODE) { if (typeof _origMpHit === 'function') { try { return _origMpHit(id, dmg, crit, popText); } catch(e){} } return; }
+  // Lemon buff +50%
+  if (player && player.character === 'lemon') dmg = dmg * 1.5;
   bufferHit(id, dmg, crit);
 };
 
 function sendPvPAbility(type, radius, dmg){
   if (!MP.room || !window.__MP_MODE || !player || !player.pos) return;
+  if (player.character === 'lemon') dmg = Math.round((dmg || 0) * 1.5);
   try {
     MP.room.send('pvp_ability', {
       type: type, radius: radius || 0, damage: dmg || 0,
@@ -66,6 +71,7 @@ function sendPvPAbility(type, radius, dmg){
   } catch(e){}
 }
 
+// ═══ Визуал эффектов ═══
 function spawnEffectVisual(type, x, y, z, radius){
   try {
     var pos = new THREE.Vector3(x || 0, y || 0, z || 0);
@@ -125,6 +131,7 @@ function spawnEffectVisual(type, x, y, z, radius){
   } catch(e){}
 }
 
+// ═══ Перехват способностей ═══
 function hookAbility(fnName, radius, dmg, abilityType){
   var orig = window[fnName]; if (typeof orig !== 'function') return false;
   if (orig._mpHooked) return true;
@@ -151,6 +158,12 @@ hookAbility('fireRocket', 10, 90, 'rocket');
 hookAbility('performDevastator', 30, 80, 'devastator');
 hookAbility('unleashDevastatorExplosion', 30, 80, 'devastator');
 
+// ★ Хуки для Картошки
+hookAbility('potatoSlam', 12, 250, 'potato_slam');
+hookAbility('tomatoNova', 12, 300, 'tomato_nova');
+hookAbility('potatoRam', 10, 150, 'potato_ram');
+hookAbility('tomatoSauce', 15, 100, 'tomato_sauce');
+
 // Камикадзе пауки
 var _origKam = window.lemonKamikaze;
 if (typeof _origKam === 'function' && !_origKam._mpHooked) {
@@ -161,6 +174,7 @@ if (typeof _origKam === 'function' && !_origKam._mpHooked) {
     try { MP.room.send('kamikaze_spiders', {}); } catch(e){}
   };
   _wKam._mpHooked = true; window.lemonKamikaze = _wKam;
+  console.log('[MP] ✓ lemonKamikaze → server');
 }
 
 var _origSum = window.lemonSummonSpiders;
@@ -172,6 +186,7 @@ if (typeof _origSum === 'function' && !_origSum._mpHooked) {
     try { MP.room.send('spawn_spiders', { count: 2 }); } catch(e){}
   };
   _wSum._mpHooked = true; window.lemonSummonSpiders = _wSum;
+  console.log('[MP] ✓ lemonSummonSpiders → server');
 }
 
 // Lemon plasma shot → PvP check
@@ -184,6 +199,7 @@ if (typeof window.lemonPlasmaShot === 'function' && !window.__MP_lemonPlasma_hoo
     try { if (MP.room && window.__MP_MODE) MP.room.send('attack', {}); } catch(e){}
     return ret;
   };
+  console.log('[MP] ✓ lemonPlasmaShot → PvP');
 }
 
 // Lemon beam → PvP в конусе
@@ -312,20 +328,16 @@ function createRemoteMesh(d){
   var suit = (d && typeof d.suit === 'number') ? (d.suit | 0) : 0;
   var evo = !!(d && d.pepperEvolved); var form = (d && typeof d.carrotForm === 'number') ? (d.carrotForm | 0) : 1;
   var pForm = (d && typeof d.potatoForm === 'number') ? (d.potatoForm | 0) : 1;
-  
+
   if (charId === 'potato') {
-    var g = new THREE.Group();
-    if (pForm === 1) { 
-        var body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 1.2), new THREE.MeshBasicMaterial({color: 0x8B4513}));
-        body.position.y = 1.8; g.add(body);
-        var head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), new THREE.MeshBasicMaterial({color: 0xD2B48C}));
-        head.position.y = 3.1; g.add(head);
-    } else { 
-        var body = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.5, 1.8, 8), new THREE.MeshBasicMaterial({color: 0xff2200}));
-        body.position.y = 1.5; g.add(body);
-        var head = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 8), new THREE.MeshBasicMaterial({color: 0xff3300}));
-        head.position.y = 2.8; g.add(head);
+    if (typeof window.createPotatoMesh === 'function') {
+      return window.createPotatoMesh(pForm);
     }
+    // Fallback
+    var g = new THREE.Group();
+    var mat = new THREE.MeshBasicMaterial({color: pForm === 1 ? 0x8B4513 : 0xFF0000});
+    var b = new THREE.Mesh(new THREE.CylinderGeometry(.6,.6,1.6,8),mat); b.position.y=1.6; g.add(b);
+    var h = new THREE.Mesh(new THREE.SphereGeometry(.5,8,8),mat); h.position.y=2.7; g.add(h);
     return g;
   }
 
@@ -534,7 +546,7 @@ setInterval(function(){ try { if (!MP.room || !window.__MP_MODE || !player || !p
 
 setInterval(function(){ try { if (!MP.room || !window.__MP_MODE || !player) return; var curSuit = (player.suitIdx | 0) || 4; var curChar = player.character || 'banana'; var curEvo = !!player.pepperEvolved; var curForm = 1; try { if (typeof CARROT_FORM !== 'undefined') curForm = CARROT_FORM | 0 || 1; } catch(e){} var curPotatoForm = player.potatoForm || 1; var l = MP._lastCharState; if (curSuit !== l.suit || curChar !== l.char || curEvo !== l.pepperEvolved || curForm !== l.carrotForm || curPotatoForm !== l.potatoForm) { MP._lastCharState = { suit: curSuit, char: curChar, pepperEvolved: curEvo, carrotForm: curForm, potatoForm: curPotatoForm }; MP.room.send('charState', { suit: curSuit, char: curChar, pepperEvolved: curEvo, carrotForm: curForm, potatoForm: curPotatoForm }); } } catch(e){} }, 200);
 
-function tryPvP(){ try { if (!MP.room || !window.__MP_MODE) return; if (!player || !player.pos || player.isDead) return; if (typeof isLabOpen !== 'undefined' && isLabOpen) return; if (MP.remotes.size === 0) return; var bestId = null, bestD = 7.5; MP.remotes.forEach(function(r, id){ try { var d = r.group.position.distanceTo(player.pos); if (d < bestD) { bestD=d; bestId=id; } } catch(e){} }); if (bestId) MP.room.send('pvp', { targetId: bestId, damage: 40 }); } catch(e){} }
+function tryPvP(){ try { if (!MP.room || !window.__MP_MODE) return; if (!player || !player.pos || player.isDead) return; if (typeof isLabOpen !== 'undefined' && isLabOpen) return; if (MP.remotes.size === 0) return; var bestId = null, bestD = 7.5; MP.remotes.forEach(function(r, id){ try { var d = r.group.position.distanceTo(player.pos); if (d < bestD) { bestD=d; bestId=id; } } catch(e){} }); if (bestId) { var dmg = (player.character === 'lemon') ? 60 : 40; MP.room.send('pvp', { targetId: bestId, damage: dmg }); } } catch(e){} }
 
 if (typeof window.performPrimaryAttack === 'function' && !window.__MP_pvp_hooked) { window.__MP_pvp_hooked = true; var _orig = window.performPrimaryAttack; window.performPrimaryAttack = function(){ try { _orig.apply(this, arguments); } catch(e){} tryPvP(); try { if (MP.room && window.__MP_MODE) MP.room.send('attack', {}); } catch(e){} }; }
 
@@ -600,6 +612,5 @@ function tick(){
 }
 tick();
 
-console.log('[MP] v23 готов. Полная версия с UI, kill feed, таблицей и Моргенкартошкой.');
-
+console.log('[MP] v24 готов. Моргенкартошка, Громтомат, все фиксы.');
 })();
