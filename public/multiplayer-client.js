@@ -1,4 +1,4 @@
-/* Banana Industries — Multiplayer Client v22 (Full) */
+/* Banana Industries — Multiplayer Client v23 (Full) */
 (function(){
 'use strict';
 
@@ -10,7 +10,7 @@ if (typeof buildings === 'undefined') { console.warn('[MP] buildings не опр
 
 var HOOKS14 = (window.__MP_HOOKS_V14 === 1);
 var HOOKS15 = (window.__MP_HOOKS_V15 === 1);
-console.log('[MP] v22. hooks14=' + (HOOKS14?'OK':'MISSING') + ' hooks15=' + (HOOKS15?'OK':'MISSING'));
+console.log('[MP] v23 (Potato Update). hooks14=' + (HOOKS14?'OK':'MISSING') + ' hooks15=' + (HOOKS15?'OK':'MISSING'));
 
 var BOSS_TYPES = { titan:1, lemon:1, valkyrie:1, necromancer:1 };
 var CDN_LIST = ['https://unpkg.com/colyseus.js@^0.14.0/dist/colyseus.js', 'https://cdn.jsdelivr.net/npm/colyseus.js@^0.14.0/dist/colyseus.js', '/colyseus.js'];
@@ -20,7 +20,7 @@ var MP = {
   remotes: new Map(), serverEnemies: new Map(), serverSpiders: new Map(),
   lastSend: 0,
   _playersWired: false, _enemiesWired: false, _spidersWired: false, _msgHooksWired: false,
-  _lastCharState: { suit: -1, char: '', pepperEvolved: false, carrotForm: 1 },
+  _lastCharState: { suit: -1, char: '', pepperEvolved: false, carrotForm: 1, potatoForm: 1 },
   _myServerHp: 460, _myServerMaxHp: 460, _myServerDead: false,
   _myRootedUntil: 0, _rootedViz: null, _buildingsSent: false,
   _frozenViz: null, _myFrozenUntil: 0
@@ -44,12 +44,10 @@ function flushHits(){
   try { MP.room.send('hit_batch', { hits: arr }); } catch(e){}
 }
 
-// ★ Fix: exec-prompt element
 if (!document.getElementById('exec-prompt')) {
   var _ep = document.createElement('div'); _ep.id = 'exec-prompt';
   _ep.style.cssText = 'position:fixed;top:58%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:30;display:none;background:rgba(255,0,85,.92);color:#fff;border:3px solid #000;outline:2px solid #fff200;padding:8px 18px;font-family:Bangers,Impact,sans-serif;font-size:24px;letter-spacing:1.5px;text-shadow:2px 2px 0 #000;';
   _ep.textContent = '[X] КАЗНЬ'; document.body.appendChild(_ep);
-  console.log('[MP] ✓ exec-prompt element создан');
 }
 
 var _origMpHit = window.__mpHit;
@@ -58,7 +56,6 @@ window.__mpHit = function(id, dmg, crit, popText){
   bufferHit(id, dmg, crit);
 };
 
-// ═══ PvP ability ═══
 function sendPvPAbility(type, radius, dmg){
   if (!MP.room || !window.__MP_MODE || !player || !player.pos) return;
   try {
@@ -69,14 +66,12 @@ function sendPvPAbility(type, radius, dmg){
   } catch(e){}
 }
 
-// ═══ Визуал эффектов ═══
 function spawnEffectVisual(type, x, y, z, radius){
   try {
     var pos = new THREE.Vector3(x || 0, y || 0, z || 0);
     var r = Number(radius) || 5;
     function ring(colorHex, maxR, yOffset){
-      var rg = new THREE.Mesh(new THREE.RingGeometry(1, maxR * 0.9, 24),
-        new THREE.MeshBasicMaterial({color: colorHex, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false}));
+      var rg = new THREE.Mesh(new THREE.RingGeometry(1, maxR * 0.9, 24), new THREE.MeshBasicMaterial({color: colorHex, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false}));
       rg.rotation.x = -Math.PI/2; rg.position.set(pos.x, (yOffset || 0.2) + pos.y, pos.z); scene.add(rg);
       var t = 0; (function anim(){ t += 0.04; rg.scale.setScalar(1 + t * 2.8); rg.material.opacity = Math.max(0, 0.85 * (1 - t)); if (t < 1.5) requestAnimationFrame(anim); else { scene.remove(rg); rg.geometry.dispose(); rg.material.dispose(); } })();
     }
@@ -110,27 +105,26 @@ function spawnEffectVisual(type, x, y, z, radius){
       spider_bite: function(){ if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,1,0)), 0xffee00, 6); },
       freeze: function(){
         for(let i=0; i<3; i++) {
-          var ice = new THREE.Mesh(new THREE.BoxGeometry(3.5 - i*0.8, 4.5 - i*0.8, 3.5 - i*0.8),
-            new THREE.MeshBasicMaterial({color: 0x00f2fe, transparent: true, opacity: 0.35 + i*0.15, wireframe: true}));
+          var ice = new THREE.Mesh(new THREE.BoxGeometry(3.5 - i*0.8, 4.5 - i*0.8, 3.5 - i*0.8), new THREE.MeshBasicMaterial({color: 0x00f2fe, transparent: true, opacity: 0.35 + i*0.15, wireframe: true}));
           ice.position.set(pos.x, pos.y + 2, pos.z); scene.add(ice);
           setTimeout(function(){ scene.remove(ice); ice.geometry.dispose(); ice.material.dispose(); }, 3000);
         }
         if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,1,0)), 0x00f2fe, 30);
       },
       nano_ult: function(){
-        ring(0x00f2fe, r || 50, 0.2);
-        ring(0xff0055, (r || 50) * 0.8, 0.3);
-        ring(0xffffff, (r || 50) * 0.6, 0.4);
-        pillar(0x00f2fe, 45);
+        ring(0x00f2fe, r || 50, 0.2); ring(0xff0055, (r || 50) * 0.8, 0.3); ring(0xffffff, (r || 50) * 0.6, 0.4); pillar(0x00f2fe, 45);
         if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,2,0)), 0x00f2fe, 50);
-      }
+      },
+      potato_slam: function(){ ring(0xffaa00, r, 0.2); if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,2,0)), 0x8B4513, 25); },
+      tomato_nova: function(){ ring(0xff0055, r, 0.2); if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,2,0)), 0xff2200, 25); },
+      potato_ram: function(){ if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,1,0)), 0x8B4513, 15); },
+      tomato_sauce: function(){ if (typeof spawnParticles==='function') spawnParticles(pos.clone().add(new THREE.Vector3(0,1,0)), 0xcc0000, 15); }
     };
     if (effectMap[type]) effectMap[type]();
     else if (typeof spawnParticles === 'function') spawnParticles(pos.clone().add(new THREE.Vector3(0,2,0)), 0xffffff, 8);
   } catch(e){}
 }
 
-// ═══ Перехват способностей ═══
 function hookAbility(fnName, radius, dmg, abilityType){
   var orig = window[fnName]; if (typeof orig !== 'function') return false;
   if (orig._mpHooked) return true;
@@ -317,6 +311,24 @@ function createRemoteMesh(d){
   var charId = (d && typeof d.char === 'string') ? d.char : 'banana';
   var suit = (d && typeof d.suit === 'number') ? (d.suit | 0) : 0;
   var evo = !!(d && d.pepperEvolved); var form = (d && typeof d.carrotForm === 'number') ? (d.carrotForm | 0) : 1;
+  var pForm = (d && typeof d.potatoForm === 'number') ? (d.potatoForm | 0) : 1;
+  
+  if (charId === 'potato') {
+    var g = new THREE.Group();
+    if (pForm === 1) { 
+        var body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 1.2), new THREE.MeshBasicMaterial({color: 0x8B4513}));
+        body.position.y = 1.8; g.add(body);
+        var head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), new THREE.MeshBasicMaterial({color: 0xD2B48C}));
+        head.position.y = 3.1; g.add(head);
+    } else { 
+        var body = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.5, 1.8, 8), new THREE.MeshBasicMaterial({color: 0xff2200}));
+        body.position.y = 1.5; g.add(body);
+        var head = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 8), new THREE.MeshBasicMaterial({color: 0xff3300}));
+        head.position.y = 2.8; g.add(head);
+    }
+    return g;
+  }
+
   if (charId === 'pepper') { try { if (evo && typeof window.createPepperEvolvedMesh === 'function') { var m = window.createPepperEvolvedMesh(); if (m && m.isObject3D) return m; } if (typeof window.createPepperMesh === 'function') { var m2 = window.createPepperMesh(); if (m2 && m2.isObject3D) return m2; } } catch(e){} }
   if (charId === 'carrot') { try { if (form === 2 && typeof window.createCarrotGiantMesh === 'function') { var m = window.createCarrotGiantMesh(); if (m && m.isObject3D) return m; } if (typeof window.createCarrotMesh === 'function') { var m2 = window.createCarrotMesh(); if (m2 && m2.isObject3D) return m2; } } catch(e){} }
   if (charId === 'lemon') { try { if (typeof window.createLemonMesh === 'function') { var m = window.createLemonMesh(); if (m && m.isObject3D) return m; } } catch(e){} }
@@ -341,7 +353,7 @@ function addRemote(id, d){
   g.add(mesh); try { g.add(makeNameTag(d.name)); } catch(e){} applyScaleForChar(g, d);
   g.position.set(Number(d.x)||0, Number(d.y)||0, Number(d.z)||0); scene.add(g);
   var hpBar = makePlayerHpBar();
-  MP.remotes.set(id, { group: g, mesh: mesh, hpBar: hpBar, target: new THREE.Vector3(Number(d.x)||0, Number(d.y)||0, Number(d.z)||0), yaw: Number(d.ry)||0, anim: 0, lastChar: d.char || 'banana', lastSuit: d.suit | 0, lastEvo: !!d.pepperEvolved, lastForm: d.carrotForm | 0 || 1 });
+  MP.remotes.set(id, { group: g, mesh: mesh, hpBar: hpBar, target: new THREE.Vector3(Number(d.x)||0, Number(d.y)||0, Number(d.z)||0), yaw: Number(d.ry)||0, anim: 0, lastChar: d.char || 'banana', lastSuit: d.suit | 0, lastEvo: !!d.pepperEvolved, lastForm: d.carrotForm | 0 || 1, lastPotatoForm: d.potatoForm | 0 || 1 });
 }
 function removeRemote(id){
   if (!safeId(id)) return; var r = MP.remotes.get(id); if (!r) return;
@@ -352,7 +364,7 @@ function recreateRemote(id, r, p){
   try { if (r.mesh) r.mesh.traverse(function(o){ if(o.geometry) o.geometry.dispose(); }); scene.remove(r.group); } catch(e){}
   var g = new THREE.Group(); var mesh = createRemoteMesh(p); g.add(mesh); try { g.add(makeNameTag(p.name)); } catch(e){} applyScaleForChar(g, p);
   g.position.copy(r.group.position); g.rotation.copy(r.group.rotation); scene.add(g);
-  r.group = g; r.mesh = mesh; r.lastChar = p.char || 'banana'; r.lastSuit = p.suit | 0; r.lastEvo = !!p.pepperEvolved; r.lastForm = p.carrotForm | 0 || 1;
+  r.group = g; r.mesh = mesh; r.lastChar = p.char || 'banana'; r.lastSuit = p.suit | 0; r.lastEvo = !!p.pepperEvolved; r.lastForm = p.carrotForm | 0 || 1; r.lastPotatoForm = p.potatoForm | 0 || 1;
 }
 
 function addServerEnemy(id, d){
@@ -489,7 +501,6 @@ function attach(room){
     room.onMessage('dmg', function(m){ try { var r = MP.serverEnemies.get(m.enemyId); if (!r || !r.local || !r.local.group) return; if (typeof spawnParticles === 'function') { spawnParticles(r.local.group.position.clone().add(new THREE.Vector3(0,2,0)), 0xff9f1a, 2); } } catch(e){} });
     room.onMessage('enemy_die', function(m){ try { var r = MP.serverEnemies.get(m.enemyId); if (r && r.local && r.local.group && typeof spawnGroundCrackRing === 'function') { spawnGroundCrackRing(r.local.group.position, m.isBoss ? 0xff00ff : 0xff0055, m.isBoss ? 12 : 4.5); } if (m.isBoss && typeof spawnComicPop === 'function' && player && player.pos) { spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,7,0)), '💀 БОСС ПОВЕРЖЕН! 💀', '#ffea00'); } } catch(e){} });
     room.onMessage('wave_up', function(m){ try { if (typeof spawnComicPop === 'function' && player && player.pos) { spawnComicPop(player.pos.clone().add(new THREE.Vector3(0,4,0)), '⚠ ВОЛНА '+(m.wave||'?')+' ⚠', '#ff9f1a'); } } catch(e){} });
-    // ★ V22: камикадзе attach
     room.onMessage('kamikaze_attach', function(m) {
       var r = MP.serverSpiders.get(m.spiderId);
       if (r) r.attachedTo = m.targetId;
@@ -506,8 +517,9 @@ function startNet(fn){
     try {
       MP.client = new window.Colyseus.Client(serverUrl()); var codeVal = ($('mp-code').value || '').trim() || randCode();
       var form = 1; try { if (typeof CARROT_FORM !== 'undefined') form = CARROT_FORM | 0 || 1; } catch(e){}
-      var opts = { code: codeVal.toUpperCase(), name: (($('mp-name').value || 'Игрок').trim().slice(0,16)) || 'Игрок', char: (player && player.character) || 'banana', suit: (player && typeof player.suitIdx === 'number') ? player.suitIdx : 4, pepperEvolved: !!(player && player.pepperEvolved), carrotForm: form };
-      $('mp-code').value = opts.code; MP._lastCharState = { suit: opts.suit, char: opts.char, pepperEvolved: opts.pepperEvolved, carrotForm: opts.carrotForm };
+      var pForm = 1; try { if (typeof player !== 'undefined' && player.potatoForm) pForm = player.potatoForm; } catch(e){}
+      var opts = { code: codeVal.toUpperCase(), name: (($('mp-name').value || 'Игрок').trim().slice(0,16)) || 'Игрок', char: (player && player.character) || 'banana', suit: (player && typeof player.suitIdx === 'number') ? player.suitIdx : 4, pepperEvolved: !!(player && player.pepperEvolved), carrotForm: form, potatoForm: pForm };
+      $('mp-code').value = opts.code; MP._lastCharState = { suit: opts.suit, char: opts.char, pepperEvolved: opts.pepperEvolved, carrotForm: opts.carrotForm, potatoForm: opts.potatoForm };
       setStatus('CONNECT…'); fn(opts).then(attach).catch(function(e){ setStatus('FAIL', true); setInfo(String((e&&e.message)||e)); });
     } catch(e){ setStatus('FAIL', true); setInfo(String((e&&e.message)||e)); }
   });
@@ -520,7 +532,7 @@ $('mp-enemies').onclick = function(){ if (!MP.room || !window.__MP_MODE) { setIn
 
 setInterval(function(){ try { if (!MP.room || !window.__MP_MODE || !player || !player.pos) return; if (player.isDead) return; if (MP._myRootedUntil > performance.now()) return; var now = performance.now(); if (now - MP.lastSend < 60) return; MP.lastSend = now; var anim = (player.vel && (Math.abs(player.vel.x)+Math.abs(player.vel.z)) > 4) ? 1 : 0; MP.room.send('mv', { x:player.pos.x||0, y:player.pos.y||0, z:player.pos.z||0, ry:player.facingYaw||0, anim:anim }); } catch(e){} }, 30);
 
-setInterval(function(){ try { if (!MP.room || !window.__MP_MODE || !player) return; var curSuit = (player.suitIdx | 0) || 4; var curChar = player.character || 'banana'; var curEvo = !!player.pepperEvolved; var curForm = 1; try { if (typeof CARROT_FORM !== 'undefined') curForm = CARROT_FORM | 0 || 1; } catch(e){} var l = MP._lastCharState; if (curSuit !== l.suit || curChar !== l.char || curEvo !== l.pepperEvolved || curForm !== l.carrotForm) { MP._lastCharState = { suit: curSuit, char: curChar, pepperEvolved: curEvo, carrotForm: curForm }; MP.room.send('charState', { suit: curSuit, char: curChar, pepperEvolved: curEvo, carrotForm: curForm }); } } catch(e){} }, 200);
+setInterval(function(){ try { if (!MP.room || !window.__MP_MODE || !player) return; var curSuit = (player.suitIdx | 0) || 4; var curChar = player.character || 'banana'; var curEvo = !!player.pepperEvolved; var curForm = 1; try { if (typeof CARROT_FORM !== 'undefined') curForm = CARROT_FORM | 0 || 1; } catch(e){} var curPotatoForm = player.potatoForm || 1; var l = MP._lastCharState; if (curSuit !== l.suit || curChar !== l.char || curEvo !== l.pepperEvolved || curForm !== l.carrotForm || curPotatoForm !== l.potatoForm) { MP._lastCharState = { suit: curSuit, char: curChar, pepperEvolved: curEvo, carrotForm: curForm, potatoForm: curPotatoForm }; MP.room.send('charState', { suit: curSuit, char: curChar, pepperEvolved: curEvo, carrotForm: curForm, potatoForm: curPotatoForm }); } } catch(e){} }, 200);
 
 function tryPvP(){ try { if (!MP.room || !window.__MP_MODE) return; if (!player || !player.pos || player.isDead) return; if (typeof isLabOpen !== 'undefined' && isLabOpen) return; if (MP.remotes.size === 0) return; var bestId = null, bestD = 7.5; MP.remotes.forEach(function(r, id){ try { var d = r.group.position.distanceTo(player.pos); if (d < bestD) { bestD=d; bestId=id; } } catch(e){} }); if (bestId) MP.room.send('pvp', { targetId: bestId, damage: 40 }); } catch(e){} }
 
@@ -541,8 +553,8 @@ function tick(){
       MP.remotes.forEach(function(r, id){
         try {
           var p = MP.room.state.players.get(id); if (!p) return;
-          var curChar = p.char || 'banana', curSuit = p.suit | 0, curEvo = !!p.pepperEvolved, curForm = p.carrotForm | 0 || 1;
-          if (curChar !== r.lastChar || curSuit !== r.lastSuit || curEvo !== r.lastEvo || curForm !== r.lastForm) { recreateRemote(id, r, p); }
+          var curChar = p.char || 'banana', curSuit = p.suit | 0, curEvo = !!p.pepperEvolved, curForm = p.carrotForm | 0 || 1, curPotatoForm = p.potatoForm | 0 || 1;
+          if (curChar !== r.lastChar || curSuit !== r.lastSuit || curEvo !== r.lastEvo || curForm !== r.lastForm || curPotatoForm !== r.lastPotatoForm) { recreateRemote(id, r, p); }
           var px=Number(p.x), py=Number(p.y), pz=Number(p.z), pry=Number(p.ry);
           if (!isFinite(px)) px=r.group.position.x; if (!isFinite(py)) py=r.group.position.y; if (!isFinite(pz)) pz=r.group.position.z; if (!isFinite(pry)) pry=r.yaw;
           r.target.set(px,py,pz); r.anim = p.anim | 0; r.group.position.lerp(r.target, 0.18); r.group.visible = !p.dead;
@@ -588,6 +600,6 @@ function tick(){
 }
 tick();
 
-console.log('[MP] v22 готов. Полная версия с UI, kill feed, таблицей и новыми визуалами.');
+console.log('[MP] v23 готов. Полная версия с UI, kill feed, таблицей и Моргенкартошкой.');
 
 })();
