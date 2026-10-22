@@ -1,15 +1,16 @@
 // ============================================================================
-// BANANA INDUSTRIES — GLOBAL PATCH v90 (ULTIMATE CAMPAIGN, BOSS & WORLD EDITION)
-// • Гарпун Хохлоркови: дальность уменьшена в 3 раза (750м), плавная скорость (110 м/с)
-// • Хардкорные Боссы с уникальными фазами, спец-атаками, гравитацией и цунами
-// • 6 новых видов врагов (Sentinel, Juggernaut, Паук-Прыгун, Алхимик, Жировик, Крио-Оса)
-// • Живая карта: Био-купола лечения, Ульи Симбиота, Золотые гейзеры, Блокпосты Citrus
-// • 16 разнообразных глав сюжета (Оборона, Перехват конвоя, Взлом точек, Сбор, Боссы)
-// • 100% сохранение всех 5 героев, 3D Крио-Куба [C], костюмов, фраз и правок v53–v80
+// BANANA INDUSTRIES — GLOBAL PATCH v100 (SOLO PINNACLE BOSSES & FIXED GRAPPLE)
+// • ИСПРАВЛЕН ГАРПУН ХОХЛОРКОВИ [ПКМ]: точный луч камеры, запрет полета назад,
+//   плавная скорость (46 м/с), дальность 160м, мгновенная остановка на крыше/стене.
+// • ИСПРАВЛЕН БУР ГИГАНТА [ПКМ в форме 2]: контролируемый рывок без вылета за карту.
+// • ИСПРАВЛЕНА МИССИЯ СЕРВЕРОВ ШРЕКИЧА: открытая площадь + взлом ударом ИЛИ стоянием.
+// • УБРАН СПАМ МЕЛКИХ МОБОВ: чистые бои и строгое СОЛО (1 на 1) с финальными боссами!
+// • ХАРДКОРНЫЕ СОЛО-БОССЫ ГРЕЙПСТАСИК И ЖИРИГОРЬ (3 фазы, каст-бар, 5 уникальных атак).
+// • 100% сохранение всех 5 персонажей, 3D Крио-Куба [C], шейдера SSS и правок v53.
 // ============================================================================
 (function () {
   'use strict';
-  console.log("🍌 [PATCH v90] Загружен: Гарпун 750м, 16 глав кампании, усиленные боссы, новые враги и живая карта.");
+  console.log("🍌 [PATCH v100] Загружен: Фикс Гарпуна, Фикс Серверов Шрекича, Соло-Боссы Грейпстасик и Жиригорь.");
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ═══ 0. УЛУЧШЕННЫЙ ШЕЙДЕР И ГРАФИЧЕСКИЙ ПАЙПЛАЙН (SSS + ЦЕДРА + КОНТРАСТ)
@@ -251,10 +252,10 @@
     if (typeof _shaderCache !== 'undefined') {
       const cached = _shaderCache.get(k);
       if (cached) {
-        if (!cached._protoV90Upgraded) {
+        if (!cached._protoV100Upgraded) {
           cached.vertexShader = PROTO_VERTEX_SHADER;
           cached.fragmentShader = PROTO_FRAGMENT_SHADER;
-          cached._protoV90Upgraded = true;
+          cached._protoV100Upgraded = true;
           cached.needsUpdate = true;
         }
         return cached;
@@ -276,7 +277,7 @@
       vertexShader: PROTO_VERTEX_SHADER,
       fragmentShader: PROTO_FRAGMENT_SHADER
     });
-    mat._protoV90Upgraded = true;
+    mat._protoV100Upgraded = true;
     if (typeof _shaderCache !== 'undefined') _shaderCache.set(k, mat);
     if (typeof _cachedShaderSet !== 'undefined') _cachedShaderSet.add(mat);
     return mat;
@@ -285,10 +286,10 @@
   function upgradeGraphicsPipeline() {
     if (typeof _shaderCache !== 'undefined') {
       _shaderCache.forEach((mat) => {
-        if (mat && mat.isShaderMaterial && !mat._protoV90Upgraded) {
+        if (mat && mat.isShaderMaterial && !mat._protoV100Upgraded) {
           mat.vertexShader = PROTO_VERTEX_SHADER;
           mat.fragmentShader = PROTO_FRAGMENT_SHADER;
-          mat._protoV90Upgraded = true;
+          mat._protoV100Upgraded = true;
           mat.needsUpdate = true;
         }
       });
@@ -296,16 +297,16 @@
     if (typeof scene !== 'undefined') {
       scene.traverse((obj) => {
         if (obj.material && obj.material.isShaderMaterial && obj.material.uniforms && obj.material.uniforms.uCol1) {
-          if (!obj.material._protoV90Upgraded) {
+          if (!obj.material._protoV100Upgraded) {
             obj.material.vertexShader = PROTO_VERTEX_SHADER;
             obj.material.fragmentShader = PROTO_FRAGMENT_SHADER;
-            obj.material._protoV90Upgraded = true;
+            obj.material._protoV100Upgraded = true;
             obj.material.needsUpdate = true;
           }
         }
       });
     }
-    if (typeof renderer !== 'undefined') renderer.toneMappingExposure = 1.36;
+    if (typeof renderer !== 'undefined') renderer.toneMappingExposure = 1.35;
     if (typeof hemiLight !== 'undefined') {
       hemiLight.intensity = 1.15;
       hemiLight.color.setHex(0x99ddff);
@@ -318,8 +319,34 @@
   }
   setTimeout(upgradeGraphicsPipeline, 80);
 
+  // Вспомогательная функция: гарантированно находит точку ВНЕ любого здания для спавна миссий/боссов
+  function getSafeOpenGroundPos(x, z, extraMargin = 6) {
+    let sx = x, sz = z;
+    if (typeof buildings === 'undefined') return new THREE.Vector3(sx, 0, sz);
+    for (let iter = 0; iter < 8; iter++) {
+      let inside = false;
+      for (let i = 0; i < buildings.length; i++) {
+        const b = buildings[i];
+        if (sx > b.minX - extraMargin && sx < b.maxX + extraMargin && sz > b.minZ - extraMargin && sz < b.maxZ + extraMargin) {
+          inside = true;
+          const dxMin = Math.abs(sx - (b.minX - extraMargin));
+          const dxMax = Math.abs(sx - (b.maxX + extraMargin));
+          const dzMin = Math.abs(sz - (b.minZ - extraMargin));
+          const dzMax = Math.abs(sz - (b.maxZ + extraMargin));
+          const m = Math.min(dxMin, dxMax, dzMin, dzMax);
+          if (m === dxMin) sx = b.minX - extraMargin - 2;
+          else if (m === dxMax) sx = b.maxX + extraMargin + 2;
+          else if (m === dzMin) sz = b.minZ - extraMargin - 2;
+          else sz = b.maxZ + extraMargin + 2;
+        }
+      }
+      if (!inside) break;
+    }
+    return new THREE.Vector3(sx, 0, sz);
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
-  // ═══ 1. СБАЛАНСИРОВАННЫЙ ЛИАНОВЫЙ ГАРПУН ХОХЛОРКОВИ (750 М, ПЛАВНЫЙ ПОЛЁТ)
+  // ═══ 1. ПОЛНЫЙ ФИКС ЛИАНОВОГО ГАРПУНА И БУРА ХОХЛОРКОВИ (БЕЗ ПОЛЕТА НАЗАД/ДАЛЕКО)
   // ═══════════════════════════════════════════════════════════════════════════
   if (typeof addProp === 'function') {
     const _origAddProp = window.addProp;
@@ -366,10 +393,10 @@
     if (!player.isGrounded && !player.isWallRunning && !player.isFlying && player.pos.y > 4 && CARROT_FORM === 1 && !player._activeGrapple) {
       if (!player.isBulletdropping) {
         player.isBulletdropping = true;
-        player.vel.y = -72;
+        player.vel.y = -70;
         const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
-        player.vel.x = fwd.x * 26;
-        player.vel.z = fwd.z * 26;
+        player.vel.x = fwd.x * 22;
+        player.vel.z = fwd.z * 22;
         SoundFX.whip();
         spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 2, 0)), '*КОРНЕВОЙ КОЛ!*', '#2ecc71');
       }
@@ -384,8 +411,8 @@
       player.attackTimer = player.attackDuration;
       player.facingYaw = player.camYaw;
       const fwd = new THREE.Vector3(-Math.sin(player.facingYaw), 0, -Math.cos(player.facingYaw));
-      player.vel.x += fwd.x * 12;
-      player.vel.z += fwd.z * 12;
+      player.vel.x += fwd.x * 10;
+      player.vel.z += fwd.z * 10;
       const st = carrotStats();
       const dmg = st.dmg * 2.8;
       const chest = new THREE.Vector3(player.pos.x, player.pos.y + 4, player.pos.z);
@@ -413,11 +440,11 @@
     player.comboResetTimer = 1.6;
     const combos = [
       null,
-      { dur: 0.21, tilt: -0.2, r: 11.5, lunge: 15, dmg: 1.15, label: '*ХЛЫСТ ЛОЗОЙ!*' },
-      { dur: 0.21, tilt: 0.2,  r: 11.5, lunge: 15, dmg: 1.15, label: '*ХЛЫСТ ЛОЗОЙ!*' },
-      { dur: 0.30, tilt: 0,    r: 14.5, lunge: 16, dmg: 1.35, label: '*360° БОТВА!*', spin: true },
-      { dur: 0.34, tilt: -0.5, r: 12.5, lunge: 15, dmg: 1.55, label: '*КОРНЕВОЙ АППЕРКОТ!*', launch: true },
-      { dur: 0.46, tilt: -1.0, r: 15.5, lunge: 24, dmg: 2.25, label: '*КОРНЕВОЙ ШКВАЛ!*', finisher: true }
+      { dur: 0.21, tilt: -0.2, r: 11.5, lunge: 14, dmg: 1.15, label: '*ХЛЫСТ ЛОЗОЙ!*' },
+      { dur: 0.21, tilt: 0.2,  r: 11.5, lunge: 14, dmg: 1.15, label: '*ХЛЫСТ ЛОЗОЙ!*' },
+      { dur: 0.30, tilt: 0,    r: 14.5, lunge: 15, dmg: 1.35, label: '*360° БОТВА!*', spin: true },
+      { dur: 0.34, tilt: -0.5, r: 12.5, lunge: 14, dmg: 1.55, label: '*КОРНЕВОЙ АППЕРКОТ!*', launch: true },
+      { dur: 0.46, tilt: -1.0, r: 15.5, lunge: 20, dmg: 2.25, label: '*КОРНЕВОЙ ШКВАЛ!*', finisher: true }
     ];
     const C = combos[player.comboStep];
     player.attackDuration = C.dur;
@@ -459,94 +486,46 @@
     checkCarDestruction(new THREE.Vector3(hx, 0, hz), hr);
   };
 
-  // ─── ДАЛЬНОСТЬ ГАРПУНА УМЕНЬШЕНА В 3 РАЗА (750 М) + КОНТРОЛИРУЕМАЯ СКОРОСТЬ ───
+  // ─── ТОЧНЫЙ И ПЛАВНЫЙ ГАРПУН [ПКМ] (ДАЛЬНОСТЬ 160 М, СКОРОСТЬ 46 М/С, СТРОГО ВПЕРЕД) ───
   let _newVineCd = 0;
-  const VINE_CD = 0.55;
-  const HARPOON_MAX_RANGE = 750; // Уменьшено в 3 раза с 2250м!
+  const VINE_CD = 0.65;
+  const HARPOON_MAX_RANGE = 160; // Оптимальная дистанция без улета в конец карты!
+  const HARPOON_PULL_SPEED = 46; // Плавная, контролируемая скорость притягивания!
   player._activeGrapple = null;
 
-  function findBestBuildingGrapplePoint(origin, fwd3D, fwdFlat) {
-    const rc = new THREE.Raycaster();
-    rc.set(origin, fwd3D);
-    rc.far = HARPOON_MAX_RANGE;
-    const hits3D = rc.intersectObjects(buildingMeshes, false).filter((h) => h.point.y > 0.8);
-    if (hits3D.length > 0) {
-      return { point: hits3D[0].point, distance: hits3D[0].distance };
+  // Переопределяем также Бур Гиганта (Форма 2), чтобы он не запускал игрока со скоростью 400!
+  window.carrotGiantDrillDash = function () {
+    if (!CARROT_MODE || CARROT_FORM !== 2 || player.isDead) return;
+    if (player._giantDrillCd > 0) {
+      spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 5, 0)), '*БУР КД ' + player._giantDrillCd.toFixed(1) + 'с*', '#ff5500');
+      return;
     }
-
-    const pitchOffsets = [0.06, -0.05, 0.14, 0.22];
-    for (let i = 0; i < pitchOffsets.length; i++) {
-      const testPitch = (player.camPitch || 0) - pitchOffsets[i];
-      const cosP = Math.cos(testPitch);
-      const testDir = new THREE.Vector3(
-        -Math.sin(player.camYaw) * cosP,
-        -Math.sin(testPitch),
-        -Math.cos(player.camYaw) * cosP
-      ).normalize();
-      rc.set(origin, testDir);
-      rc.far = HARPOON_MAX_RANGE;
-      const fanHits = rc.intersectObjects(buildingMeshes, false).filter((h) => h.point.y > 1.0);
-      if (fanHits.length > 0) {
-        return { point: fanHits[0].point, distance: fanHits[0].distance };
+    if (player.carrotStamina < 40) {
+      spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 5, 0)), '*МАЛО СТАМИНЫ!*', '#ff2200');
+      return;
+    }
+    player.carrotStamina -= 40;
+    player._giantDrillCd = 4.0;
+    SoundFX.devastator();
+    SoundFX.boom();
+    triggerHitstopAndChroma(0.14, 0.9, 1.4);
+    player.facingYaw = player.camYaw;
+    const fwd = new THREE.Vector3(-Math.sin(player.facingYaw), 0, -Math.cos(player.facingYaw));
+    // Вместо безумных 400 из index.html ставим контролируемые 68!
+    player.vel.x = fwd.x * 68;
+    player.vel.z = fwd.z * 68;
+    player.vel.y = 6;
+    player.dodgeIframes = 0.65;
+    spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 6, 0)), '*МОРКОВНЫЙ БУР!*', '#ff5500');
+    const st = carrotStats();
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      if (e.group.position.distanceTo(player.pos) < 18) {
+        damageEnemy(e, st.dmg * 5.0, fwd.clone().multiplyScalar(10), '*РАЗОРВАНО БУРОМ!*');
       }
     }
-
-    let bestB = null;
-    let bestScore = Infinity;
-    for (let i = 0; i < buildings.length; i++) {
-      const b = buildings[i];
-      if (!b || b.topY < 8) continue;
-      const targetY = Math.min(b.topY - 0.8, Math.max(player.pos.y + 6, b.topY * 0.72));
-      const bPos = new THREE.Vector3(b.x, targetY, b.z);
-      const toB = bPos.clone().sub(origin);
-      const dist = toB.length();
-      if (dist < 6 || dist > HARPOON_MAX_RANGE) continue;
-      const dotFlat = new THREE.Vector3(toB.x, 0, toB.z).normalize().dot(fwdFlat);
-      if (dotFlat < 0.72) continue;
-      const score = dist * (1.25 - dotFlat);
-      if (score < bestScore) {
-        bestScore = score;
-        const clampX = Math.max(b.minX - 1.2, Math.min(b.maxX + 1.2, player.pos.x));
-        const clampZ = Math.max(b.minZ - 1.2, Math.min(b.maxZ + 1.2, player.pos.z));
-        bestB = {
-          point: new THREE.Vector3(clampX, targetY, clampZ),
-          distance: dist,
-          building: b
-        };
-      }
-    }
-    return bestB;
-  }
-
-  function startContinuousGrapplePull(targetPoint, options = {}) {
-    const origin = player.pos.clone().add(new THREE.Vector3(0, 2.0, 0));
-    const dist = origin.distanceTo(targetPoint);
-    // Сбалансированная скорость полёта (90–125 м/с вместо 320–400 м/с), чтобы не улетать за карту
-    const pullSpeed = options.speed || Math.min(125, Math.max(85, dist * 0.9));
-    const maxDuration = Math.min(2.4, Math.max(0.2, dist / pullSpeed + 0.12));
-
-    let vineTendril = null;
-    if (typeof OrganicTendril3D === 'function') {
-      vineTendril = new OrganicTendril3D(scene, origin.clone(), targetPoint.clone(), 0x2ecc71, 0.42, maxDuration + 0.12);
-      activeTendrils.push(vineTendril);
-    }
-
-    player._activeGrapple = {
-      targetPos: targetPoint.clone(),
-      speed: pullSpeed,
-      timer: 0,
-      maxDuration: maxDuration,
-      enemyRef: options.enemyRef || null,
-      tendril: vineTendril
-    };
-
-    player.isGrounded = false;
-    player.isWallRunning = false;
-    player.isBulletdropping = false;
-    player.dodgeIframes = Math.max(player.dodgeIframes, maxDuration + 0.2);
-    player.facingYaw = Math.atan2(-(targetPoint.x - player.pos.x), -(targetPoint.z - player.pos.z));
-    if (typeof postUniforms !== 'undefined') postUniforms.uRadialBlur.value = 0.85;
-  }
+    checkCarDestruction(player.pos, 10);
+  };
 
   window.carrotVineHarpoon = function () {
     if (!CARROT_MODE || CARROT_FORM !== 1 || player.isDead) return;
@@ -558,113 +537,175 @@
     }
 
     const origin = player.pos.clone().add(new THREE.Vector3(0, 2.2, 0));
-    const cosP = Math.cos(player.camPitch || 0);
-    const fwd3D = new THREE.Vector3(
-      -Math.sin(player.camYaw) * cosP,
-      -Math.sin(player.camPitch || 0),
-      -Math.cos(player.camYaw) * cosP
-    ).normalize();
+    // Берем истинное направление взгляда камеры через getWorldDirection!
+    const camDir = new THREE.Vector3();
+    camera.getWorldDirection(camDir);
+    camDir.normalize();
+
     const fwdFlat = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw)).normalize();
+    // Выравниваем горизонтальную компоненту луча строго по взгляду игрока вперед
+    const aimDir = new THREE.Vector3(fwdFlat.x, THREE.MathUtils.clamp(camDir.y + 0.08, -0.35, 0.65), fwdFlat.z).normalize();
 
-    const buildHit = findBestBuildingGrapplePoint(origin, fwd3D, fwdFlat);
-    const buildingDist = buildHit ? buildHit.distance : Infinity;
+    // 1. Сначала проверяем точное попадание луча из точки перед грудью игрока по мешам зданий
+    const rc = new THREE.Raycaster();
+    const rayStart = origin.clone().addScaledVector(fwdFlat, 1.8);
+    rc.set(rayStart, aimDir);
+    rc.far = HARPOON_MAX_RANGE;
 
+    const rawHits = rc.intersectObjects(buildingMeshes, false);
+    let validBuildHit = null;
+    for (let i = 0; i < rawHits.length; i++) {
+      const h = rawHits[i];
+      if (h.point.y <= 0.8) continue; // Игнорируем асфальт
+      const toPt = h.point.clone().sub(player.pos);
+      const flatToPt = new THREE.Vector3(toPt.x, 0, toPt.z);
+      const flatDist = flatToPt.length();
+      if (flatDist < 5.0 || flatDist > HARPOON_MAX_RANGE) continue;
+      // СТРОГАЯ ПРОВЕРКА: точка должна быть СТРОГО СПЕРЕДИ по курсу взгляда (dot > 0.75)!
+      if (flatToPt.normalize().dot(fwdFlat) < 0.75) continue;
+
+      // Сдвигаем точку на 2.2 метра от стены к игроку, чтобы НЕ застрять внутри коллизии здания!
+      const safePoint = h.point.clone().addScaledVector(fwdFlat, -2.2);
+      safePoint.y = Math.max(2.5, h.point.y);
+      validBuildHit = { point: safePoint, distance: h.distance };
+      break;
+    }
+
+    // 2. Поиск врага строго спереди в конусе прицела (до 120м)
     let bestEnemy = null;
-    let bestEnemyScore = Infinity;
-    let bestEnemyDist = HARPOON_MAX_RANGE;
+    let bestEnemyDist = 120;
     for (let i = 0; i < enemies.length; i++) {
       const en = enemies[i];
       if (!en || !en.group) continue;
-      const eCenter = en.group.position.clone().add(new THREE.Vector3(0, 2.0, 0));
-      const toE = eCenter.sub(origin);
-      const dist = toE.length();
-      if (dist > HARPOON_MAX_RANGE) continue;
-      const dot3D = toE.clone().normalize().dot(fwd3D);
-      const dotFlat = new THREE.Vector3(toE.x, 0, toE.z).normalize().dot(fwdFlat);
-      if (dot3D < 0.72 && dotFlat < 0.78) continue;
-      const score = dist * (1.2 - Math.max(dot3D, dotFlat));
-      if (score < bestEnemyScore) {
-        bestEnemyScore = score;
-        bestEnemyDist = dist;
+      const toE = en.group.position.clone().sub(player.pos);
+      const flatDist = Math.hypot(toE.x, toE.z);
+      if (flatDist < 3.0 || flatDist > 120) continue;
+      const dot = new THREE.Vector3(toE.x, 0, toE.z).normalize().dot(fwdFlat);
+      if (dot < 0.78) continue; // Строго спереди!
+      if (flatDist < bestEnemyDist) {
+        bestEnemyDist = flatDist;
         bestEnemy = en;
       }
     }
 
-    if (bestEnemy && bestEnemyDist <= buildingDist + 8) {
+    const buildingDist = validBuildHit ? validBuildHit.distance : Infinity;
+
+    // А) Попадание во врага
+    if (bestEnemy && bestEnemyDist <= buildingDist + 4) {
       _newVineCd = VINE_CD;
-      const isElite = (
+      const isHeavy = (
         bestEnemy._isBoss || bestEnemy._isStoryConstruct ||
         bestEnemy.type === 'titan' || bestEnemy.type === 'tank' ||
         bestEnemy.type === 'lemon' || bestEnemy.type === 'valkyrie' ||
-        bestEnemy.type === 'necromancer' || bestEnemy.type === 'heli' ||
-        bestEnemy.type === 'shield' || bestEnemy.type === 'sniper'
+        bestEnemy.type === 'necromancer' || bestEnemy.type === 'heli'
       );
-      const tp = bestEnemy.group.position.clone().add(new THREE.Vector3(0, 2.0, 0));
+      const tp = bestEnemy.group.position.clone().add(new THREE.Vector3(0, 1.8, 0));
       SoundFX.whip();
-      triggerHitstopAndChroma(0.05, 0.4, 0.9);
 
-      if (isElite || bestEnemyDist > 36) {
-        spawnComicPop(origin.clone().add(new THREE.Vector3(0, 2, 0)), `*🌿 ГАРПУН-ТАРАН (${Math.round(bestEnemyDist)}М)!*`, '#ff2200');
-        startContinuousGrapplePull(tp, { speed: 120, enemyRef: bestEnemy });
+      if (isHeavy) {
+        // Плавный подлёт к боссу со скоростью 48 м/с (останавливается за 3.5м перед боссом!)
+        const stopPoint = bestEnemy.group.position.clone().addScaledVector(fwdFlat, -3.5);
+        stopPoint.y = Math.max(1.0, bestEnemy.group.position.y + 1.5);
+        const dur = Math.min(1.4, Math.max(0.2, bestEnemyDist / HARPOON_PULL_SPEED));
+        const vine = new OrganicTendril3D(scene, origin.clone(), tp, 0x2ecc71, 0.42, dur + 0.1);
+        activeTendrils.push(vine);
+
+        player._activeGrapple = {
+          targetPos: stopPoint,
+          initialDir: fwdFlat.clone(),
+          speed: HARPOON_PULL_SPEED,
+          timer: 0,
+          maxDuration: dur,
+          enemyRef: bestEnemy,
+          tendril: vine
+        };
+        spawnComicPop(origin.clone().add(new THREE.Vector3(0, 2, 0)), '*🌿 К БОССУ!*', '#ff2200');
       } else {
+        // Обычного врага притягиваем к себе!
         if (activeTendrils.length < 10) {
-          activeTendrils.push(new OrganicTendril3D(scene, origin.clone(), tp.clone(), 0x2ecc71, 0.44, 0.45));
+          activeTendrils.push(new OrganicTendril3D(scene, origin.clone(), tp, 0x2ecc71, 0.42, 0.4));
         }
         spawnComicPop(origin.clone().add(new THREE.Vector3(0, 2, 0)), '*ИДИ СЮДА!*', '#2ecc71');
         const capE = bestEnemy;
-        capE._rooted = 0.9;
-        const pullTarget = player.pos.clone().add(fwdFlat.clone().multiplyScalar(2.6));
-        let pullStep = 0;
-        const pullEnemyInterval = setInterval(() => {
-          pullStep++;
-          if (!capE || !capE.group || !capE.group.parent || pullStep >= 10) {
-            clearInterval(pullEnemyInterval);
+        capE._rooted = 1.0;
+        const pullDest = player.pos.clone().addScaledVector(fwdFlat, 2.5);
+        let step = 0;
+        const pullTimer = setInterval(() => {
+          step++;
+          if (!capE || !capE.group || !capE.group.parent || step >= 8) {
+            clearInterval(pullTimer);
             if (capE && capE.group && capE.group.parent) {
               const st = carrotStats();
-              spawnSlashArc(player.pos.clone().add(new THREE.Vector3(0, 2, 0)), player.facingYaw, 0, 0x2ecc71, 9.5, 0.35);
-              damageEnemy(capE, st.dmg * 3.6, fwdFlat.clone().multiplyScalar(10), '*УДАР С РАЗВОРОТА!*');
-              spawnParticles(capE.group.position.clone().add(new THREE.Vector3(0, 2, 0)), 0xadff2f, 16);
-              triggerHitstopAndChroma(0.07, 0.6, 1.1);
+              spawnSlashArc(player.pos.clone().add(new THREE.Vector3(0, 2, 0)), player.facingYaw, 0, 0x2ecc71, 8.5, 0.35);
+              damageEnemy(capE, st.dmg * 3.4, fwdFlat.clone().multiplyScalar(8), '*УДАР С РАЗВОРОТА!*');
             }
             return;
           }
-          capE.group.position.lerp(pullTarget, 0.38);
+          capE.group.position.lerp(pullDest, 0.42);
         }, 25);
       }
       return;
     }
 
-    if (buildHit) {
+    // Б) Притягивание к зданию (строго вперед, со скоростью 46 м/с!)
+    if (validBuildHit) {
       _newVineCd = VINE_CD;
-      const hp = buildHit.point.clone();
-      const distB = Math.round(buildHit.distance);
-      SoundFX.swing(500);
-      SoundFX.whip();
-      spawnComicPop(origin.clone().add(new THREE.Vector3(0, 2, 0)), `*🌿 ТРОС К ЗДАНИЮ (${distB}М)!*`, '#2ecc71');
-      startContinuousGrapplePull(hp, { speed: Math.min(125, Math.max(85, distB * 0.95)) });
+      const hp = validBuildHit.point;
+      const distB = validBuildHit.distance;
+      const dur = Math.min(1.8, Math.max(0.22, distB / HARPOON_PULL_SPEED));
+      const vine = new OrganicTendril3D(scene, origin.clone(), hp.clone(), 0x2ecc71, 0.40, dur + 0.1);
+      activeTendrils.push(vine);
+
+      player._activeGrapple = {
+        targetPos: hp,
+        initialDir: fwdFlat.clone(),
+        speed: HARPOON_PULL_SPEED,
+        timer: 0,
+        maxDuration: dur,
+        enemyRef: null,
+        tendril: vine
+      };
+      player.isGrounded = false;
+      player.isBulletdropping = false;
+      player.facingYaw = player.camYaw;
+      SoundFX.swing(480);
+      spawnComicPop(origin.clone().add(new THREE.Vector3(0, 2, 0)), `*🌿 ГАРПУН (${Math.round(distB)}М)*`, '#2ecc71');
       return;
     }
 
-    // Короткий контролируемый рывок вперед (36м), если прицел направлен в пустое пространство
+    // В) Если впереди в пределах 160м нет здания — короткий контролируемый выпад вперед на 18 метров
     _newVineCd = VINE_CD;
-    const dashTarget = origin.clone().add(fwd3D.clone().multiplyScalar(36));
-    dashTarget.y = Math.max(1.5, Math.min(origin.y + 14, dashTarget.y));
-    SoundFX.swing(440);
-    spawnComicPop(origin.clone().add(new THREE.Vector3(0, 2, 0)), '*🌿 ЛОЗОВОЙ РЫВОК!*', '#2ecc71');
-    startContinuousGrapplePull(dashTarget, { speed: 95 });
+    const shortTarget = player.pos.clone().addScaledVector(fwdFlat, 18);
+    shortTarget.y = Math.max(1.5, player.pos.y + 3.5);
+    const vine = new OrganicTendril3D(scene, origin.clone(), shortTarget.clone(), 0x2ecc71, 0.35, 0.35);
+    activeTendrils.push(vine);
+    player._activeGrapple = {
+      targetPos: shortTarget,
+      initialDir: fwdFlat.clone(),
+      speed: 42,
+      timer: 0,
+      maxDuration: 0.35,
+      enemyRef: null,
+      tendril: vine
+    };
+    player.facingYaw = player.camYaw;
+    SoundFX.swing(420);
   };
 
+  // Перехватываем ПКМ (button === 2) для ОБЕИХ форм Хохлоркови в фазе захвата, блокируя багованные обработчики из index.html
   window.addEventListener('mousedown', function (e) {
     if (e.button !== 2) return;
     if (typeof player === 'undefined' || player.isDead) return;
-    if (!CARROT_MODE || CARROT_FORM !== 1) return;
+    if (!CARROT_MODE) return;
     if (typeof gameStarted !== 'undefined' && !gameStarted) return;
     if (typeof isLabOpen !== 'undefined' && isLabOpen) return;
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
-    window.carrotVineHarpoon();
+    if (CARROT_FORM === 1) window.carrotVineHarpoon();
+    else window.carrotGiantDrillDash();
   }, true);
+
   setInterval(() => { if (_newVineCd > 0) _newVineCd = Math.max(0, _newVineCd - 0.05); }, 50);
 
   const _origRootBind = window.carrotRootBind;
@@ -673,7 +714,7 @@
     player.carrotStamina = Math.max(40, player.carrotStamina);
     player.carrotRootBindCd = 0;
     if (_origRootBind) _origRootBind.apply(this, arguments);
-    const bindRadius = CARROT_FORM === 2 ? 52 : 42;
+    const bindRadius = CARROT_FORM === 2 ? 48 : 38;
     const st = carrotStats();
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
@@ -693,7 +734,7 @@
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // ═══ 2. ПОКАДРОВЫЙ КОНТРОЛЛЕР ГАРПУНА С МЯГКИМ ТОРМОЖЕНИЕМ У ЗДАНИЙ
+  // ═══ 2. БЕЗОПАСНОЕ ДВИЖЕНИЕ ГАРПУНА ПОСЛЕ БАЗОВОЙ ФИЗИКИ (БЕЗ ОТСКОКОВ НАЗАД)
   // ═══════════════════════════════════════════════════════════════════════════
   if (typeof updatePlayerChoreographyAndCamera === 'function') {
     const _origChoreo = window.updatePlayerChoreographyAndCamera;
@@ -702,6 +743,17 @@
       const savedX = player.pos.x;
       const savedZ = player.pos.z;
       const preY = player.pos.y;
+
+      // Ограничитель максимальной горизонтальной скорости для Хохлоркови, чтобы никогда не улетать в край карты!
+      if (CARROT_MODE) {
+        const maxAllowedVel = CARROT_FORM === 2 ? 70 : 52;
+        const hVel = Math.hypot(player.vel.x, player.vel.z);
+        if (hVel > maxAllowedVel) {
+          const scale = maxAllowedVel / hVel;
+          player.vel.x *= scale;
+          player.vel.z *= scale;
+        }
+      }
 
       const hiddenEnemies = [];
       if (preY > 3 || player._activeGrapple) {
@@ -716,79 +768,7 @@
         }
       }
 
-      if (player._activeGrapple) {
-        const g = player._activeGrapple;
-        g.timer += dt;
-
-        if (g.enemyRef && g.enemyRef.group && g.enemyRef.group.parent) {
-          g.targetPos.copy(g.enemyRef.group.position).add(new THREE.Vector3(0, 1.5, 0));
-        }
-        if (g.tendril) {
-          g.tendril.targetEnd.copy(g.targetPos);
-        }
-
-        const toTarget = g.targetPos.clone().sub(player.pos);
-        const dist = toTarget.length();
-        const dir = dist > 0.001 ? toTarget.clone().divideScalar(dist) : new THREE.Vector3(0, 0, -1);
-
-        // Отцепление по Пробелу с умеренным импульсом
-        if (keys['Space'] && g.timer > 0.12) {
-          player._activeGrapple = null;
-          player.vel.set(dir.x * 26, Math.max(16, dir.y * 18 + 12), dir.z * 26);
-          player.airFlipTimer = 0.38;
-          SoundFX.swing(420);
-        } else if (dist <= 3.5 || g.timer >= g.maxDuration) {
-          player._activeGrapple = null;
-          if (g.enemyRef && g.enemyRef.group && g.enemyRef.group.parent) {
-            const st = carrotStats();
-            player.pos.copy(g.targetPos);
-            player.vel.set(0, 8, 0);
-            damageEnemy(g.enemyRef, st.dmg * 5.2, dir.clone().multiplyScalar(10), '*СОКРУШИТЕЛЬНЫЙ ТАРАН!*');
-            spawnParticles(g.targetPos.clone(), 0x2ecc71, 24);
-            spawnGroundCrackRing(g.enemyRef.group.position, 0x2ecc71, 14);
-            triggerHitstopAndChroma(0.10, 0.8, 1.3);
-          } else {
-            // Точная посадка на крышу или фасад здания без перелета!
-            let vaultedToRoof = false;
-            const pad = 2.6;
-            for (let i = 0; i < buildings.length; i++) {
-              const b = buildings[i];
-              if (
-                g.targetPos.x >= b.minX - pad && g.targetPos.x <= b.maxX + pad &&
-                g.targetPos.z >= b.minZ - pad && g.targetPos.z <= b.maxZ + pad
-              ) {
-                if (g.targetPos.y >= b.topY - 6.0) {
-                  const inwardX = Math.max(b.minX + 2, Math.min(b.maxX - 2, g.targetPos.x));
-                  const inwardZ = Math.max(b.minZ + 2, Math.min(b.maxZ - 2, g.targetPos.z));
-                  player.pos.set(inwardX, b.topY + 0.35, inwardZ);
-                  player.vel.set(dir.x * 5, 2, dir.z * 5);
-                  player.isGrounded = true;
-                  vaultedToRoof = true;
-                  spawnGroundCrackRing(player.pos, 0x2ecc71, 5);
-                  break;
-                } else {
-                  player.pos.copy(g.targetPos);
-                  player.vel.set(dir.x * 4, 14, dir.z * 4);
-                  player.isWallRunning = true;
-                  vaultedToRoof = true;
-                  break;
-                }
-              }
-            }
-            if (!vaultedToRoof) {
-              player.pos.copy(g.targetPos);
-              player.vel.set(dir.x * 10, Math.max(4, dir.y * 8), dir.z * 10);
-            }
-            SoundFX.hit(160, 0.15);
-          }
-        } else {
-          const step = Math.min(dist, g.speed * dt);
-          player.pos.addScaledVector(dir, step);
-          player.vel.set(dir.x * 8, dir.y * 8 + 38 * dt, dir.z * 8);
-          player.facingYaw = Math.atan2(-dir.x, -dir.z);
-        }
-      }
-
+      // Сначала вызываем базовую физику
       _origChoreo.apply(this, arguments);
 
       for (let i = 0; i < hiddenEnemies.length; i++) {
@@ -796,6 +776,39 @@
         if (h.en.group && h.en.group.position) {
           h.en.group.position.x = h.x;
           h.en.group.position.z = h.z;
+        }
+      }
+
+      // Теперь (ПОСЛЕ _origChoreo) обрабатываем плавное движение на тросе гарпуна!
+      if (player._activeGrapple) {
+        const g = player._activeGrapple;
+        g.timer += dt;
+
+        const toTarget = g.targetPos.clone().sub(player.pos);
+        const dist = toTarget.length();
+        // Проекция оставшегося вектора на изначальное направление выстрела:
+        // Если forwardDot <= 0, значит игрок уже достиг плоскости цели — НЕМЕДЛЕННО отключаем трос, чтобы никогда не тянуть назад!
+        const forwardDot = toTarget.x * g.initialDir.x + toTarget.z * g.initialDir.z;
+
+        if ((keys['Space'] && g.timer > 0.12) || dist <= 2.8 || forwardDot <= 0.2 || g.timer >= g.maxDuration || player.isWallRunning) {
+          const finishedEnemy = g.enemyRef;
+          player._activeGrapple = null;
+          // Полностью гасим паразитную инерцию при остановке у здания!
+          player.vel.set(g.initialDir.x * 4, Math.max(0, Math.min(8, player.vel.y)), g.initialDir.z * 4);
+
+          if (finishedEnemy && finishedEnemy.group && finishedEnemy.group.parent) {
+            const st = carrotStats();
+            damageEnemy(finishedEnemy, st.dmg * 4.5, g.initialDir.clone().multiplyScalar(8), '*СОКРУШИТЕЛЬНЫЙ УДАР!*');
+            spawnParticles(finishedEnemy.group.position.clone().add(new THREE.Vector3(0, 2, 0)), 0x2ecc71, 20);
+            spawnGroundCrackRing(finishedEnemy.group.position, 0x2ecc71, 12);
+          }
+        } else {
+          const dir = toTarget.clone().divideScalar(dist);
+          const step = Math.min(dist, g.speed * dt);
+          player.pos.addScaledVector(dir, step);
+          player.vel.set(0, 0, 0);
+          player.facingYaw = Math.atan2(-g.initialDir.x, -g.initialDir.z);
+          playerGroup.position.copy(player.pos);
         }
       }
 
@@ -984,19 +997,27 @@
         en.group.position.y = 0;
       }
 
-      const prison = createSolidIceCubePrison(en.group.position.clone(), en.radius || 1.4, CRYO_FREEZE_DURATION);
+      const freezeTime = en._isBoss ? 3.2 : CRYO_FREEZE_DURATION;
+      const prison = createSolidIceCubePrison(en.group.position.clone(), en.radius || 1.4, freezeTime);
       en._iceCubePrison = prison;
-      en.frozen = CRYO_FREEZE_DURATION;
-      en._rooted = CRYO_FREEZE_DURATION;
+      en.frozen = freezeTime;
+      en._rooted = freezeTime;
       en._frozenLockedPos = en.group.position.clone();
       en._telegraphT = 0;
       en._pendingRanged = null;
       en.meleeAnim = 0;
-      en.attackCd = Math.max(en.attackCd || 0, CRYO_FREEZE_DURATION + 0.5);
+      en.attackCd = Math.max(en.attackCd || 0, freezeTime + 0.5);
       en.vel.set(0, 0, 0);
       en._mpMoving = false;
 
-      if (en._isJirigory) en._fatShieldBroken = true;
+      // Если на Жиригоре был включен Панцирь Поглощения или каст Сверхновой — заморозка мгновенно разбивает его!
+      if (en._isJirigory) {
+        en._fatCarapaceActive = false;
+        if (en._carapaceMesh) en._carapaceMesh.visible = false;
+        en._castingUltimate = false;
+        setBossCastBar('', 0, false);
+        spawnComicPop(en.group.position.clone().add(new THREE.Vector3(0, 9, 0)), '*❄️ ЖИРОВАЯ БРОНЯ РАСКОЛОТА ЛЬДОМ!*', '#00f2fe');
+      }
 
       if (!en._mpId && typeof damageEnemy === 'function') {
         en._suppressShatterOnFreezeInit = true;
@@ -1019,9 +1040,97 @@
   }, 100);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // ═══ 4. НОВЫЕ РАЗНООБРАЗНЫЕ ВРАГИ И БОССЫ С АКТИВНЫМИ СПЕЦ-АТАКАМИ
+  // ═══ 4. СОЛО-ДУЭЛИ И МНОГОФАЗНЫЕ ФИНАЛЬНЫЕ БОССЫ (ГРЕЙПСТАСИК & ЖИРИГОРЬ)
   // ═══════════════════════════════════════════════════════════════════════════
-  const worldHazards = []; // Лужи кислоты, золотого жира и гравитационные вихри
+  let _soloBossLock = false;
+  const worldHazards = [];
+  const shockwaveRings = [];
+
+  // UI каст-бара спец-способностей Босса прямо под главным Boss HUD
+  const bossCastEl = document.createElement('div');
+  bossCastEl.id = 'boss-cast-bar-wrap';
+  bossCastEl.style.cssText =
+    'position:fixed;top:186px;left:50%;transform:translateX(-50%);width:480px;z-index:26;' +
+    'background:rgba(12,0,22,.95);border:3px solid #000;outline:2px solid #ff0055;padding:6px 12px;' +
+    'display:none;text-align:center;box-shadow:0 0 25px rgba(255,0,85,.6),5px 5px 0 #000;pointer-events:none;';
+  bossCastEl.innerHTML =
+    '<div id="boss-cast-label" style="font-family:Bangers,Impact,sans-serif;font-size:16px;color:#fff200;letter-spacing:1.5px;margin-bottom:4px;">⚠️ АТАКА БОССА ⚠️</div>' +
+    '<div style="width:100%;height:12px;background:#1a0010;border:2px solid #000;overflow:hidden;">' +
+      '<div id="boss-cast-fill" style="width:0%;height:100%;background:linear-gradient(90deg,#ff0055,#fff200);transition:width .06s linear;"></div>' +
+    '</div>';
+  document.body.appendChild(bossCastEl);
+
+  function setBossCastBar(label, pct, visible = true) {
+    if (!visible) {
+      bossCastEl.style.display = 'none';
+      return;
+    }
+    bossCastEl.style.display = 'block';
+    const lbl = document.getElementById('boss-cast-label');
+    const fill = document.getElementById('boss-cast-fill');
+    if (lbl) lbl.innerText = label;
+    if (fill) fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+  }
+
+  // Полная зачистка арены от всех мелких мобов для честной СОЛО-дуэли 1 на 1 с Боссом!
+  function enterSoloBossArena(bossObj) {
+    _soloBossLock = true;
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      if (e === bossObj) continue;
+      if (e._iceCubePrison) {
+        clearTimeout(e._iceCubePrison.timerId);
+        e._iceCubePrison.cleanup();
+      }
+      if (enemyHpBars && enemyHpBars.has(e)) {
+        const bar = enemyHpBars.get(e);
+        if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
+        enemyHpBars.delete(e);
+      }
+      if (e.group && e.group.parent) scene.remove(e.group);
+      enemies.splice(i, 1);
+    }
+  }
+
+  // Блокируем спавн любых сторонних мобов во время соло-босса и ограничиваем массовку в обычных волнах до 6 врагов!
+  const _origSpawnStrikeForce = window.spawnStrikeForce;
+  window.spawnStrikeForce = function () {
+    if (_soloBossLock || activeBoss) return;
+    if (enemies.length >= 6) return;
+    if (_origSpawnStrikeForce) return _origSpawnStrikeForce.apply(this, arguments);
+  };
+
+  const _origAdvanceWave = window.advanceWave;
+  window.advanceWave = function () {
+    if (_soloBossLock || activeBoss) return;
+    if (_origAdvanceWave) return _origAdvanceWave.apply(this, arguments);
+  };
+
+  const _origCheckBossConditions = window.checkBossConditions;
+  window.checkBossConditions = function () {
+    if (_soloBossLock || (window.StoryCampaign && !window.StoryCampaign.completed)) return;
+    if (_origCheckBossConditions) return _origCheckBossConditions.apply(this, arguments);
+  };
+
+  // Расходящееся ударное кольцо, через которое нужно перепрыгивать!
+  function spawnJumpableShockwave(origin, maxRadius, speed, colorHex, dmgVal) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(1, 0.35, 8, 36),
+      new THREE.MeshBasicMaterial({ color: colorHex })
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(origin.x, 0.45, origin.z);
+    scene.add(ring);
+    shockwaveRings.push({
+      mesh: ring,
+      center: origin.clone(),
+      radius: 1.5,
+      maxRadius: maxRadius,
+      speed: speed,
+      dmg: dmgVal,
+      hitPlayer: false
+    });
+  }
 
   function spawnHazardPool(pos, radius, colorHex, durationSec, isFatSlow = false) {
     const mesh = new THREE.Mesh(
@@ -1034,31 +1143,13 @@
     worldHazards.push({ mesh, pos: pos.clone(), radius, life: durationSec, maxLife: durationSec, isFatSlow });
   }
 
-  // 1) Модернизация солдат в 4 разных подтипа: Sentinel, Juggernaut, Кислотный Алхимик, Крио-Оса
+  // Модернизация солдат в читаемых Orange Sentinels / Juggernauts
   function upgradeEnemyToComicSpec(en) {
     if (!en || !en.group || en._comicUpgraded) return;
     en._comicUpgraded = true;
     const g = en.group;
-
-    // Назначаем случайный спец-архетип, если это обычный солдат
-    const roll = Math.random();
-    if (en.type === 'brawler' || en.type === 'shield') {
-      en._archetype = 'juggernaut';
-      en.hp *= 1.35;
-      en.maxHp = en.hp;
-    } else if (roll < 0.28) {
-      en._archetype = 'alchemist'; // Кислотный Алхимик
-    } else if (roll < 0.48) {
-      en._archetype = 'wasp'; // Летающая Крио-Оса с джетпаком
-      en.flying = true;
-      en.group.position.y = 8 + Math.random() * 6;
-      en.speed = 16;
-    } else {
-      en._archetype = 'sentinel'; // Orange Sentinel с нагрудным дуговым реактором
-    }
-
-    const reactorColor = en._archetype === 'juggernaut' ? 0xff00ff
-      : (en._archetype === 'alchemist' ? 0x44ff00 : (en._archetype === 'wasp' ? 0x00f2fe : 0xfff200));
+    const isJugg = en.type === 'brawler' || en.type === 'shield';
+    const reactorColor = isJugg ? 0xff00ff : 0xfff200;
 
     const reactorCore = new THREE.Mesh(
       new THREE.CylinderGeometry(0.24, 0.24, 0.14, 12),
@@ -1068,140 +1159,21 @@
     reactorCore.position.set(0, 2.42, 0.58);
     g.add(reactorCore);
 
-    if (en._archetype === 'juggernaut') {
-      // Двойные силовые щиты Джаггернаута
-      const shMat = new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.45, wireframe: true });
-      for (let s of [-1, 1]) {
-        const sh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.2, 1.4), shMat);
-        sh.position.set(s * 1.25, 2.0, 0.4);
-        g.add(sh);
-      }
-    } else if (en._archetype === 'alchemist') {
-      // Кислотные колбы за спиной Алхимика
-      const tankMat = new THREE.MeshBasicMaterial({ color: 0x66ff00 });
-      for (let s of [-0.35, 0.35]) {
-        const vat = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.1, 8), tankMat);
-        vat.position.set(s, 2.4, -0.45);
-        g.add(vat);
-      }
-    } else if (en._archetype === 'wasp') {
-      // Крылья джетпака Осы
-      const wingMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe, transparent: true, opacity: 0.65, side: THREE.DoubleSide });
-      for (let s of [-1, 1]) {
-        const w = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 0.08), wingMat);
-        w.position.set(s * 1.1, 2.5, -0.3);
-        w.rotation.z = s * 0.35;
-        g.add(w);
-      }
+    const pauldronMat = isJugg
+      ? createPrototypeShader(0x6a1b9a, 0x2a0040, 2, 0xff00ff)
+      : createPrototypeShader(0xff7f00, 0x903000, 9, 0xfff200);
+    for (let side of [-1, 1]) {
+      const pauldron = addInkOutline(new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.45, 0.75), pauldronMat), 1.05);
+      pauldron.position.set(side * 1.05, 2.72, 0);
+      pauldron.rotation.z = -side * 0.25;
+      g.add(pauldron);
     }
   }
-
-  // 2) Виноградный Паук-Прыгун (прыгает к игроку и ненадолго опутывает)
-  window.spawnGrapeSpiderDrone = function (x, z) {
-    const g = new THREE.Group();
-    g.position.set(x, 0, z);
-    const grapeMat = createPrototypeShader(0x6a1b9a, 0x2a0040, 1, 0xff00ff);
-    const legMat = createPrototypeShader(0x2a2a35, 0x101015, 9, 0xaa44ff);
-
-    const clusterOffsets = [
-      [0, 1.4, 0], [0.55, 1.3, 0.3], [-0.55, 1.3, 0.3], [0, 1.3, -0.55],
-      [0.4, 1.85, 0], [-0.4, 1.85, 0], [0, 1.9, 0.4], [0, 0.95, 0.4], [0, 2.25, 0]
-    ];
-    clusterOffsets.forEach(([ox, oy, oz]) => {
-      const berry = addInkOutline(new THREE.Mesh(new THREE.SphereGeometry(0.46, 10, 10), grapeMat), 1.05);
-      berry.position.set(ox, oy, oz);
-      g.add(berry);
-    });
-
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff0055 }));
-    eye.position.set(0, 1.45, 0.78);
-    g.add(eye);
-
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      const legGroup = new THREE.Group();
-      legGroup.position.set(Math.cos(a) * 0.7, 1.1, Math.sin(a) * 0.7);
-      legGroup.rotation.y = -a;
-      const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 1.2, 6), legMat);
-      upper.rotation.z = 0.75;
-      upper.position.set(0.45, 0.2, 0);
-      legGroup.add(upper);
-      const lower = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.03, 1.4, 6), legMat);
-      lower.rotation.z = -0.35;
-      lower.position.set(0.95, -0.45, 0);
-      legGroup.add(lower);
-      g.add(legGroup);
-    }
-
-    scene.add(g);
-    const droneObj = {
-      type: 'brawler',
-      _isGrapeDrone: true,
-      _leapCd: 2.0 + Math.random() * 2.0,
-      group: g,
-      hp: 850,
-      maxHp: 850,
-      vel: new THREE.Vector3(),
-      speed: 19,
-      radius: 1.5,
-      attackCd: 1.2,
-      meleeCd: 0,
-      meleeAnim: 0,
-      _meleeDur: 0.35,
-      dodgeCd: 99,
-      flying: false,
-      _rooted: 0
-    };
-    enemies.push(droneObj);
-    return droneObj;
-  };
-
-  // 3) Золотой Жировик (Jiri-Spawn) — делится на 2 малых жировика при гибели!
-  window.spawnGoldenFatBlob = function (x, z, isMini = false) {
-    const g = new THREE.Group();
-    g.position.set(x, 0, z);
-    const sc = isMini ? 0.6 : 1.15;
-    g.scale.setScalar(sc);
-    const fatMat = createPrototypeShader(0xe8b828, 0x9c6e08, 4, 0xfff200);
-    const body = addInkOutline(new THREE.Mesh(new THREE.SphereGeometry(1.4, 12, 10), fatMat), 1.04);
-    body.scale.set(1.2, 0.85, 1.2);
-    body.position.y = 1.1;
-    g.add(body);
-    const head = addInkOutline(new THREE.Mesh(new THREE.SphereGeometry(0.85, 10, 10), fatMat), 1.04);
-    head.position.y = 2.2;
-    g.add(head);
-    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 6), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
-    eyeL.position.set(-0.3, 2.35, 0.75);
-    const eyeR = eyeL.clone();
-    eyeR.position.x = 0.3;
-    g.add(eyeL, eyeR);
-
-    scene.add(g);
-    const blob = {
-      type: 'brawler',
-      _isFatBlob: true,
-      _isMiniBlob: isMini,
-      group: g,
-      hp: isMini ? 550 : 1250,
-      maxHp: isMini ? 550 : 1250,
-      vel: new THREE.Vector3(),
-      speed: isMini ? 18 : 13,
-      radius: 1.5 * sc,
-      attackCd: 1.4,
-      meleeCd: 0,
-      meleeAnim: 0,
-      _meleeDur: 0.4,
-      dodgeCd: 99,
-      flying: false,
-      _rooted: 0
-    };
-    enemies.push(blob);
-    return blob;
-  };
 
   if (typeof spawnCitrusSoldier === 'function') {
     const _origSpawnSoldier = window.spawnCitrusSoldier;
     window.spawnCitrusSoldier = function (x, z, role = 'mandarin') {
+      if (_soloBossLock) return;
       _origSpawnSoldier.call(this, x, z, role);
       const newest = enemies[enemies.length - 1];
       if (newest) upgradeEnemyToComicSpec(newest);
@@ -1211,349 +1183,37 @@
     }, 200);
   }
 
-  // Перехват урона: Щит Центуриона, Жировая броня Жиригоря, Раскол льда x2 и Деление Жировиков
-  const _origDamageEnemyV90 = window.damageEnemy;
-  window.damageEnemy = function (en, dmg, knockVec, popText) {
-    if (!en) return;
-
-    // Адаптивный щит Кислотного Центуриона (требует мощного удара > 140 урона для пробития)
-    if (en._isAcidCenturion && en._adaptiveShieldHp > 0) {
-      if (dmg > 140) {
-        en._adaptiveShieldHp -= dmg;
-        popText = en._adaptiveShieldHp <= 0 ? '*💥 ЩИТ ЦЕНТУРИОНА ПРОБИТ!*' : '*⚡ ЩИТ ТРЕЩИТ!*';
-        if (en._adaptiveShieldHp <= 0 && en._centurionShieldMesh) {
-          en._centurionShieldMesh.visible = false;
-        }
-      } else {
-        dmg *= 0.3;
-        popText = '*🛡️ АБСОЛЮТНОЕ ПИТАНИЕ (НУЖЕН МОЩНЫЙ УДАР Q/F/КОМБО)!*';
-      }
-    }
-
-    // Жировая защита Жиригоря в Главе 13 (пробивается заморозкой [C] или кислотой)
-    if (en._isJirigory && !en._fatShieldBroken && en.frozen <= 0 && !LEMON_MODE && !player._multifruitTitanActive) {
-      dmg *= 0.25;
-      popText = '*💛 ЖИР ПОГЛОТИЛ УДАР! (ЗАМОРОЗЬТЕ НА [C] ИЛИ КИСЛОТОЙ)*';
-    }
-
-    // Двойной урон по замороженным целям
-    if (en.frozen > 0 && !en._suppressShatterOnFreezeInit && dmg > 15) {
-      dmg *= 2.0;
-      popText = '*💎 РАСКОЛ ЛЬДА! x2*';
-      if (en._iceCubePrison && en.hp - dmg <= 0) {
-        clearTimeout(en._iceCubePrison.timerId);
-        en._iceCubePrison.cleanup();
-        en._iceCubePrison = null;
-      }
-    }
-
-    const willDie = (en.hp - dmg * player.comboMult) <= 0;
-    const deathPos = en.group ? en.group.position.clone() : null;
-    const isBigFatBlob = en._isFatBlob && !en._isMiniBlob;
-
-    const res = _origDamageEnemyV90.call(this, en, dmg, knockVec, popText);
-
-    if (en.hp <= 0) {
-      if (en._iceCubePrison) {
-        clearTimeout(en._iceCubePrison.timerId);
-        en._iceCubePrison.cleanup();
-        en._iceCubePrison = null;
-      }
-      // Деление Золотого Жировика на 2 малых сгустка при смерти
-      if (isBigFatBlob && deathPos && enemies.length < 30) {
-        spawnHazardPool(deathPos, 4.5, 0xe8b828, 6.0, true);
-        window.spawnGoldenFatBlob(deathPos.x + 2, deathPos.z, true);
-        window.spawnGoldenFatBlob(deathPos.x - 2, deathPos.z, true);
-      }
-    }
-    return res;
-  };
-
-  // ─── АКТИВНЫЙ ИИ БОССОВ И НОВЫХ ВРАГОВ (КАЖДЫЙ КАДР) ───
-  if (typeof updateEnemiesAndVehicles === 'function') {
-    const _origUpdateEnemiesV90 = window.updateEnemiesAndVehicles;
-    window.updateEnemiesAndVehicles = function (dt, now) {
-      for (let i = 0; i < enemies.length; i++) {
-        const en = enemies[i];
-        if (en.frozen > 0) {
-          en.frozen -= dt;
-          en._rooted = Math.max(en._rooted || 0, en.frozen);
-          en.vel.set(0, 0, 0);
-          en._telegraphT = 0;
-          en.meleeAnim = 0;
-          if (en._frozenLockedPos) en.group.position.copy(en._frozenLockedPos);
-          if (en._iceCubePrison && en._iceCubePrison.group) {
-            en._iceCubePrison.group.position.copy(en.group.position);
-          }
-          if (en.frozen <= 0 && en._iceCubePrison) {
-            clearTimeout(en._iceCubePrison.timerId);
-            en._iceCubePrison.cleanup();
-            en._iceCubePrison = null;
-          }
-          continue;
-        }
-
-        // Спец-поведение новых архетипов врагов
-        const distToP = en.group.position.distanceTo(player.pos);
-        if (en._isGrapeDrone && distToP < 24 && distToP > 6) {
-          en._leapCd = (en._leapCd || 2.5) - dt;
-          if (en._leapCd <= 0) {
-            en._leapCd = 3.2;
-            const dir = player.pos.clone().sub(en.group.position).normalize();
-            en.vel.set(dir.x * 38, 14, dir.z * 38);
-            SoundFX.whip();
-          }
-        }
-        if (en._archetype === 'alchemist' && distToP < 36) {
-          en._acidThrowCd = (en._acidThrowCd || 3.5) - dt;
-          if (en._acidThrowCd <= 0) {
-            en._acidThrowCd = 4.5;
-            const targetSpot = player.pos.clone();
-            spawnHazardPool(targetSpot, 4.5, 0x55ff00, 5.0, false);
-            spawnParticles(targetSpot.clone().add(new THREE.Vector3(0, 0.5, 0)), 0x55ff00, 10);
-          }
-        }
-        if (en._archetype === 'wasp' && en.flying) {
-          en.group.position.y = 9 + Math.sin(now * 0.004 + i) * 2.5;
-        }
-      }
-
-      _origUpdateEnemiesV90.apply(this, arguments);
-
-      // ─── УСИЛЕННЫЕ СПЕЦ-АТАКИ БОССОВ (КАЖДЫЕ НЕСКОЛЬКО СЕКУНД) ───
-      if (activeBoss && activeBoss.hp > 0 && (!activeBoss.frozen || activeBoss.frozen <= 0)) {
-        const b = activeBoss;
-        b._specialTimer = (b._specialTimer || 3.0) - dt;
-        const bPos = b.group.position;
-        const dist = bPos.distanceTo(player.pos);
-
-        if (b._specialTimer <= 0) {
-          if (b._isAcidCenturion) {
-            // Кислотный Центурион: Веер из 7 фиолетовых плазменных сфер + кислотное кольцо
-            b._specialTimer = 3.2;
-            spawnComicPop(bPos.clone().add(new THREE.Vector3(0, 9, 0)), '*🔮 КИСЛОТНЫЙ ШКВАЛ!*', '#ff00ff');
-            SoundFX.devastator();
-            const baseYaw = Math.atan2(player.pos.x - bPos.x, player.pos.z - bPos.z);
-            for (let k = -3; k <= 3; k++) {
-              const a = baseYaw + k * 0.18;
-              const pr = new THREE.Mesh(new THREE.SphereGeometry(0.65, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff00ff }));
-              pr.position.copy(bPos).add(new THREE.Vector3(0, 4.5, 0));
-              scene.add(pr);
-              projectiles.push({ mesh: pr, vel: new THREE.Vector3(Math.sin(a) * 42, 0, Math.cos(a) * 42), life: 2.5, fromPlayer: false, dmg: 26 });
-            }
-          } else if (b._isGrapestasik) {
-            // Меха-Грейпстасик на гусеницах: Громовой рывок + залп молний «ГРООО-ОО-ОМ!»
-            b._specialTimer = 2.8;
-            spawnComicPop(bPos.clone().add(new THREE.Vector3(0, 10, 0)), '*⚡ ГРООО-ОО-ОМ! ВУ! ⚡*', '#d252ff');
-            SoundFX.bossRoar();
-            const dir = player.pos.clone().sub(bPos).normalize();
-            b.vel.x = dir.x * 55;
-            b.vel.z = dir.z * 55;
-            spawnGroundCrackRing(bPos, 0xd252ff, 22);
-            // Цепь молний по направлению к игроку
-            for (let step = 1; step <= 4; step++) {
-              setTimeout(() => {
-                if (!b.group.parent) return;
-                const strikePos = bPos.clone().addScaledVector(dir, step * 7);
-                const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 24, 6), new THREE.MeshBasicMaterial({ color: 0xe066ff }));
-                bolt.position.set(strikePos.x, 12, strikePos.z);
-                scene.add(bolt);
-                setTimeout(() => { scene.remove(bolt); bolt.geometry.dispose(); bolt.material.dispose(); }, 260);
-                spawnGroundCrackRing(strikePos, 0xe066ff, 6);
-                if (player.pos.distanceTo(strikePos) < 5.5) applyDamageToHero(28);
-              }, step * 140);
-            }
-          } else if (b._isBioGrapestasik) {
-            // Био-Монстр Грейпстасик: Гравитационный Вихрь Горечи (затягивает игрока) + Шипы Лоз!
-            b._specialTimer = 3.0;
-            spawnComicPop(bPos.clone().add(new THREE.Vector3(0, 11, 0)), '*🌀 ЧЁРНАЯ ДЫРА ИСТИННОЙ ГОРЕЧИ!*', '#b833ff');
-            SoundFX.devastator();
-            spawnGroundCrackRing(bPos, 0xb833ff, 28);
-            // Гравитационное притяжение игрока к боссу, если он на земле или в воздухе в радиусе 32м
-            if (dist < 32 && dist > 5) {
-              const pull = bPos.clone().sub(player.pos).normalize().multiplyScalar(28);
-              player.vel.x += pull.x;
-              player.vel.z += pull.z;
-            }
-            // Взрывное кольцо через 0.7 сек после притяжения
-            setTimeout(() => {
-              if (!b.group.parent) return;
-              spawnGroundCrackRing(bPos, 0xff0055, 18);
-              spawnParticles(bPos.clone().add(new THREE.Vector3(0, 3, 0)), 0xb833ff, 25);
-              if (player.pos.distanceTo(bPos) < 15 && player.pos.y < 6) {
-                applyDamageToHero(38);
-                player.vel.y = 18;
-              }
-            }, 700);
-          } else if (b._isJirigory) {
-            // Жиригорь / Мега-Жиригорь: Цунами Жира (Прыжок животом) + Разлив золотых луж
-            b._specialTimer = 3.1;
-            spawnComicPop(bPos.clone().add(new THREE.Vector3(0, 11, 0)), '*💛 ЦУНАМИ ЗОЛОТОГО СТАНДАРТА!*', '#fff200');
-            SoundFX.boom();
-            b.vel.y = 22;
-            const dir = player.pos.clone().sub(bPos).normalize();
-            b.vel.x = dir.x * 36;
-            b.vel.z = dir.z * 36;
-            setTimeout(() => {
-              if (!b.group.parent) return;
-              SoundFX.devastator();
-              spawnGroundCrackRing(bPos, 0xe8b828, 26);
-              spawnHazardPool(bPos, 10, 0xe8b828, 7.0, true);
-              if (player.pos.distanceTo(bPos) < 20 && player.pos.y < 5) {
-                applyDamageToHero(36);
-                player.vel.y = 20;
-              }
-              if (enemies.filter((e) => e._isFatBlob).length < 4) {
-                window.spawnGoldenFatBlob(bPos.x + (Math.random() - 0.5) * 14, bPos.z + (Math.random() - 0.5) * 14, false);
-              }
-            }, 650);
-          }
-        }
-      }
-
-      // Обработка опасных луж на земле (Кислота и Золотой Жир)
-      for (let i = worldHazards.length - 1; i >= 0; i--) {
-        const h = worldHazards[i];
-        h.life -= dt;
-        h.mesh.material.opacity = Math.max(0, 0.68 * (h.life / h.maxLife));
-        if (player.pos.y < 1.5 && player.pos.distanceTo(h.pos) < h.radius) {
-          if (h.isFatSlow) {
-            player.vel.x *= 0.72;
-            player.vel.z *= 0.72;
-          }
-          if (Math.random() < dt * 2.5) {
-            applyDamageToHero(8);
-          }
-        }
-        if (h.life <= 0) {
-          scene.remove(h.mesh);
-          h.mesh.geometry.dispose();
-          h.mesh.material.dispose();
-          worldHazards.splice(i, 1);
-        }
-      }
-    };
-  }
-
-  // ─── СПАВН БОССОВ КАМПАНИИ С ПОВЫШЕННЫМ ЗДОРОВЬЕМ И ЩИТАМИ ───
-  window.spawnAcidCenturionBoss = function (x, z) {
-    spawnGrapeWarlord(x, z);
-    if (activeBoss) {
-      activeBoss._isAcidCenturion = true;
-      activeBoss.name = 'КИСЛОТНЫЙ ЦЕНТУРИОН («АБСОЛЮТНОЕ ПИТАНИЕ»)';
-      activeBoss.hp = 24000;
-      activeBoss.maxHp = 24000;
-      activeBoss._adaptiveShieldHp = 4500;
-      const shMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(4.8, 14, 14),
-        new THREE.MeshBasicMaterial({ color: 0xd252ff, transparent: true, opacity: 0.34, wireframe: true })
-      );
-      shMesh.position.y = 5.5;
-      activeBoss.group.add(shMesh);
-      activeBoss._centurionShieldMesh = shMesh;
-      showBossHUD('🛡️ КИСЛОТНЫЙ ЦЕНТУРИОН («АБСОЛЮТНОЕ ПИТАНИЕ») 🛡️', 'ПРОБЕЙТЕ ФИОЛЕТОВЫЙ ЩИТ СПОСОБНОСТЯМИ [Q] / [F] / ФИНИШЕРОМ!');
-    }
-    return activeBoss;
-  };
-
-  window.spawnGrapestasikBoss = function (x, z) {
+  // ─── СПАВН ФИНАЛЬНОГО БОССА 1: БИО-ТИТАН ГРЕЙПСТАСИК (СОЛО, 3 ФАЗЫ, 5 УНИКАЛЬНЫХ АТАК) ───
+  window.spawnSoloFinalGrapestasik = function (x, z) {
+    const safePt = getSafeOpenGroundPos(x, z, 8);
     if (activeBoss) {
       activeBoss.hp = 0;
-      damageEnemy(activeBoss, 999999, new THREE.Vector3(), '');
+      if (activeBoss.group && activeBoss.group.parent) scene.remove(activeBoss.group);
+      activeBoss = null;
     }
+
     const g = new THREE.Group();
-    g.position.set(x, 0, z);
-    const suitMat = createPrototypeShader(0x5b1e82, 0x26083c, 1, 0xbb44ff);
-    const headMat = createPrototypeShader(0xe05a6c, 0x8a2434, 4, 0xffaa88);
-    const treadMat = createPrototypeShader(0x282c34, 0x101216, 7, 0x00f2fe);
-    const thunderMat = new THREE.MeshBasicMaterial({ color: 0xd252ff });
-
-    const chassis = addInkOutline(new THREE.Mesh(new THREE.BoxGeometry(5.6, 2.2, 5.2), treadMat), 1.04);
-    chassis.position.y = 1.6;
-    g.add(chassis);
-    for (let side of [-1, 1]) {
-      const track = addInkOutline(new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.4, 6.8), treadMat), 1.04);
-      track.position.set(side * 2.8, 1.3, 0);
-      g.add(track);
-    }
-
-    const torso = addInkOutline(new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.2, 5.2, 12), suitMat), 1.04);
-    torso.position.y = 5.4;
-    g.add(torso);
-
-    const neck = new THREE.Group();
-    neck.position.set(0, 8.2, 0);
-    g.add(neck);
-    const head = addInkOutline(new THREE.Mesh(new THREE.SphereGeometry(2.15, 14, 14), headMat), 1.04);
-    head.position.y = 1.8;
-    neck.add(head);
-    const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.22, 0.2), new THREE.MeshBasicMaterial({ color: 0xfff200 }));
-    eyeL.position.set(-0.7, 2.0, 1.98);
-    neck.add(eyeL);
-    const eyeR = eyeL.clone();
-    eyeR.position.x = 0.7;
-    neck.add(eyeR);
-
-    const armLPivot = new THREE.Group(); armLPivot.position.set(-3.1, 7.2, 0); g.add(armLPivot);
-    const armLMesh = addInkOutline(new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.55, 4.2, 8), suitMat), 1.04);
-    armLMesh.position.y = -2.0; armLPivot.add(armLMesh);
-    const thunderL = new THREE.Mesh(new THREE.SphereGeometry(1.25, 10, 10), thunderMat);
-    thunderL.position.y = -4.2; armLPivot.add(thunderL);
-
-    const armRPivot = new THREE.Group(); armRPivot.position.set(3.1, 7.2, 0); g.add(armRPivot);
-    const armRMesh = armLMesh.clone(); armRPivot.add(armRMesh);
-    const thunderR = thunderL.clone(); armRPivot.add(thunderR);
-
-    const legLPivot = new THREE.Group(), legRPivot = new THREE.Group();
-    g.add(legLPivot, legRPivot);
-    scene.add(g);
-
-    activeBoss = {
-      type: 'lemon',
-      _isBoss: true,
-      _isGrapestasik: true,
-      name: 'ГРЕЙПСТАСИК (ГУСЕНИЧНЫЙ ШТУРМОВИК)',
-      group: g,
-      armL: armLPivot, armR: armRPivot, legL: legLPivot, legR: legRPivot,
-      neck: neck, spark: thunderL, ankle: chassis,
-      hp: 34000, maxHp: 34000,
-      vel: new THREE.Vector3(), speed: 12, radius: 4.8,
-      attackCd: 1.5, windup: 0, dodgeCd: 99, flying: false,
-      phase: 1, chargeCd: 3.0, lightningCd: 2.0, _phase2: false, _rooted: 0
-    };
-    enemies.push(activeBoss);
-    showBossHUD('🍇 ГРЕЙПСТАСИК — ШТУРМ CITRUS DEFENSE 🍇', 'ОСТЕРЕГАЙТЕСЬ ГРОМОВОГО ТАРАНА И ЦЕПИ МОЛНИЙ!');
-    SoundFX.bossRoar();
-    return activeBoss;
-  };
-
-  window.spawnBioMonsterGrapestasik = function (x, z) {
-    if (activeBoss) {
-      activeBoss.hp = 0;
-      damageEnemy(activeBoss, 999999, new THREE.Vector3(), '');
-    }
-    const g = new THREE.Group();
-    g.position.set(x, 0, z);
+    g.position.copy(safePt);
 
     const bioMat = createPrototypeShader(0x3a1058, 0x160028, 1, 0xd252ff);
     const berryMat = createPrototypeShader(0x52187a, 0x220438, 4, 0xff00ff);
     const vineMat = createPrototypeShader(0x1f3a18, 0x0a1806, 8, 0x2ecc71);
     const glowViolet = new THREE.MeshBasicMaterial({ color: 0xe066ff });
 
-    const torso = addInkOutline(new THREE.Mesh(new THREE.CylinderGeometry(3.2, 2.3, 6.4, 12), bioMat), 1.04);
+    const torso = addInkOutline(new THREE.Mesh(new THREE.CylinderGeometry(3.3, 2.4, 6.6, 12), bioMat), 1.04);
     torso.position.y = 6.8;
     g.add(torso);
 
-    const spiralCore = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.22, 8, 24), glowViolet);
-    spiralCore.position.set(0, 6.2, 2.45);
+    const spiralCore = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.24, 8, 24), glowViolet);
+    spiralCore.position.set(0, 6.4, 2.55);
     g.add(spiralCore);
 
     for (let side of [-1, 1]) {
       for (let b = 0; b < 7; b++) {
-        const berry = addInkOutline(new THREE.Mesh(new THREE.SphereGeometry(0.75, 8, 8), berryMat), 1.04);
+        const berry = addInkOutline(new THREE.Mesh(new THREE.SphereGeometry(0.78, 8, 8), berryMat), 1.04);
         berry.position.set(
-          side * (3.2 + (b % 2) * 0.6),
-          8.8 + Math.floor(b / 3) * 0.65,
+          side * (3.3 + (b % 2) * 0.6),
+          8.9 + Math.floor(b / 3) * 0.65,
           ((b % 3) - 1) * 0.65
         );
         g.add(berry);
@@ -1561,16 +1221,16 @@
     }
 
     const neck = new THREE.Group();
-    neck.position.set(0, 10.2, 0);
+    neck.position.set(0, 10.4, 0);
     g.add(neck);
-    const head = addInkOutline(new THREE.Mesh(new THREE.SphereGeometry(2.0, 12, 12), bioMat), 1.04);
+    const head = addInkOutline(new THREE.Mesh(new THREE.SphereGeometry(2.1, 12, 12), bioMat), 1.04);
     head.position.y = 1.6;
     neck.add(head);
 
     for (let side of [-1, 1]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 8), glowViolet);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.58, 8, 8), glowViolet);
       eye.scale.set(1.2, 0.75, 0.6);
-      eye.position.set(side * 0.75, 1.85, 1.75);
+      eye.position.set(side * 0.75, 1.85, 1.8);
       eye.rotation.z = -side * 0.35;
       neck.add(eye);
     }
@@ -1580,13 +1240,13 @@
     leafCrown.rotation.z = 0.4;
     neck.add(leafCrown);
 
-    const armLPivot = new THREE.Group(); armLPivot.position.set(-3.6, 9.2, 0); g.add(armLPivot);
-    const armL = addInkOutline(new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.65, 5.0, 8), bioMat), 1.04);
-    armL.position.y = -2.4; armLPivot.add(armL);
-    const clawOrbL = new THREE.Mesh(new THREE.SphereGeometry(1.3, 10, 10), new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }));
-    clawOrbL.position.y = -5.0; armLPivot.add(clawOrbL);
+    const armLPivot = new THREE.Group(); armLPivot.position.set(-3.7, 9.2, 0); g.add(armLPivot);
+    const armL = addInkOutline(new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.7, 5.2, 8), bioMat), 1.04);
+    armL.position.y = -2.5; armLPivot.add(armL);
+    const clawOrbL = new THREE.Mesh(new THREE.SphereGeometry(1.35, 10, 10), new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }));
+    clawOrbL.position.y = -5.1; armLPivot.add(clawOrbL);
 
-    const armRPivot = new THREE.Group(); armRPivot.position.set(3.6, 9.2, 0); g.add(armRPivot);
+    const armRPivot = new THREE.Group(); armRPivot.position.set(3.7, 9.2, 0); g.add(armRPivot);
     const armR = armL.clone(); armRPivot.add(armR);
     const clawOrbR = clawOrbL.clone(); armRPivot.add(clawOrbR);
 
@@ -1601,31 +1261,38 @@
     activeBoss = {
       type: 'lemon',
       _isBoss: true,
-      _isBioGrapestasik: true,
-      name: 'БИО-МОНСТР ГРЕЙПСТАСИК («ИСТИННАЯ ГОРЕЧЬ»)',
+      _isSoloGrapestasik: true,
+      name: 'БИО-ТИТАН ГРЕЙПСТАСИК («ИСТИННАЯ ГОРЕЧЬ»)',
       group: g,
       armL: armLPivot, armR: armRPivot, legL: legLPivot, legR: legRPivot,
       neck: neck, spark: spiralCore, ankle: spiralCore,
-      hp: 46000, maxHp: 46000,
-      vel: new THREE.Vector3(), speed: 13.5, radius: 5.2,
-      attackCd: 1.4, windup: 0, dodgeCd: 99, flying: false,
-      phase: 1, chargeCd: 2.8, lightningCd: 1.8, _phase2: false, _rooted: 0
+      hp: 65000, maxHp: 65000,
+      vel: new THREE.Vector3(), speed: 14.5, radius: 5.2,
+      attackCd: 1.6, windup: 0, dodgeCd: 99, flying: false,
+      phase: 1, chargeCd: 999, lightningCd: 999, _phase2: false, _phase3: false, _rooted: 0,
+      _abilityState: 'idle',
+      _abilityCooldown: 2.2,
+      _abilityRotation: 0
     };
     enemies.push(activeBoss);
-    showBossHUD('🍇 БИО-ГРЕЙПСТАСИК — ЭССЕНЦИЯ ИСТИННОЙ ГОРЕЧИ 🍇', 'ОСТЕРЕГАЙТЕСЬ ЧЁРНЫХ ДЫР ГОРЕЧИ! СПИРАЛЬНОЕ ЯДРО — УЯЗВИМАЯ ТОЧКА!');
+    enterSoloBossArena(activeBoss);
+    showBossHUD('🍇 СОЛО-ДУЭЛЬ: БИО-ТИТАН ГРЕЙПСТАСИК (ФАЗА 1/3) 🍇', 'СЛЕДИТЕ ЗА КАСТ-БАРОМ АТАК! УЯЗВИМАЯ ЗОНА — СПИРАЛЬНОЕ ЯДРО!');
     SoundFX.bossRoar();
     return activeBoss;
   };
 
-  window.spawnJirigoryBoss = function (x, z, isRecrystallized = false) {
+  // ─── СПАВН ФИНАЛЬНОГО БОССА 2: АБСОЛЮТНЫЙ ЖИРИГОРЬ (СОЛО, 3 ФАЗЫ, 5 УНИКАЛЬНЫХ АТАК) ───
+  window.spawnSoloFinalJirigory = function (x, z) {
+    const safePt = getSafeOpenGroundPos(x, z, 8);
     if (activeBoss) {
       activeBoss.hp = 0;
-      damageEnemy(activeBoss, 999999, new THREE.Vector3(), '');
+      if (activeBoss.group && activeBoss.group.parent) scene.remove(activeBoss.group);
+      activeBoss = null;
     }
+
     const g = new THREE.Group();
-    g.position.set(x, 0, z);
-    const scaleMult = isRecrystallized ? 1.48 : 1.05;
-    g.scale.setScalar(scaleMult);
+    g.position.copy(safePt);
+    g.scale.setScalar(1.22);
 
     const fatMat = createPrototypeShader(0xe8b828, 0x9c6e08, 4, 0xfff200);
     const hairMat = createPrototypeShader(0xf5d76e, 0xb8860b, 0, 0xffffff);
@@ -1673,145 +1340,581 @@
     const armRPivot = new THREE.Group(); armRPivot.position.set(4.2, 8.2, 0); g.add(armRPivot);
     const armR = armL.clone(); armRPivot.add(armR);
 
-    if (isRecrystallized) {
-      const iceCrystalMat = new THREE.MeshPhongMaterial({
-        color: 0x66f2ff,
-        emissive: 0x0a4868,
-        transparent: true,
-        opacity: 0.72,
-        shininess: 110
-      });
-      for (let i = 0; i < 8; i++) {
-        const ang = (i / 8) * Math.PI * 2;
-        const shard = new THREE.Mesh(new THREE.ConeGeometry(1.1, 6.5, 5), iceCrystalMat);
-        shard.position.set(Math.cos(ang) * 4.2, 7.5 + (i % 2) * 1.5, Math.sin(ang) * 4.2);
-        shard.rotation.z = -Math.cos(ang) * 0.55;
-        shard.rotation.x = Math.sin(ang) * 0.55;
-        g.add(shard);
-      }
+    // Скрытые до 2-й фазы кристаллы Жирной Рекристаллизации
+    const crystalGroup = new THREE.Group();
+    const iceCrystalMat = new THREE.MeshPhongMaterial({
+      color: 0x66f2ff,
+      emissive: 0x0a4868,
+      transparent: true,
+      opacity: 0.78,
+      shininess: 120
+    });
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * Math.PI * 2;
+      const shard = new THREE.Mesh(new THREE.ConeGeometry(1.1, 6.5, 5), iceCrystalMat);
+      shard.position.set(Math.cos(ang) * 4.2, 7.5 + (i % 2) * 1.5, Math.sin(ang) * 4.2);
+      shard.rotation.z = -Math.cos(ang) * 0.55;
+      shard.rotation.x = Math.sin(ang) * 0.55;
+      crystalGroup.add(shard);
     }
+    crystalGroup.visible = false;
+    g.add(crystalGroup);
+
+    // Сфера «Панциря Золотого Стандарта»
+    const carapaceMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(6.2, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0xfff200, transparent: true, opacity: 0.38, wireframe: true })
+    );
+    carapaceMesh.position.y = 5.5;
+    carapaceMesh.visible = false;
+    g.add(carapaceMesh);
 
     const legLPivot = new THREE.Group(), legRPivot = new THREE.Group();
     g.add(legLPivot, legRPivot);
     scene.add(g);
 
-    const maxHp = isRecrystallized ? 58000 : 36000;
     activeBoss = {
       type: 'brawler',
       _isBoss: true,
       _isJirigory: true,
-      _fatShieldBroken: isRecrystallized,
-      name: isRecrystallized ? 'МЕГА-ЖИРИГОРЬ (ЖИРНАЯ РЕКРИСТАЛЛИЗАЦИЯ)' : 'ЖИРИГОРЬ — ЗОЛОТОЙ СТАНДАРТ',
+      _isSoloJirigory: true,
+      _fatCarapaceActive: false,
+      _carapaceMesh: carapaceMesh,
+      _crystalGroup: crystalGroup,
+      name: 'АБСОЛЮТНЫЙ ЖИРИГОРЬ («ЗОЛОТОЙ СТАНДАРТ»)',
       group: g,
       armL: armLPivot, armR: armRPivot, legL: legLPivot, legR: legRPivot,
       neck: neck, ankle: belly,
-      hp: maxHp, maxHp: maxHp,
-      vel: new THREE.Vector3(), speed: isRecrystallized ? 11 : 9, radius: 5.5 * scaleMult,
+      hp: 82000, maxHp: 82000,
+      vel: new THREE.Vector3(), speed: 12.5, radius: 6.2,
       attackCd: 1.5, meleeCd: 0, meleeAnim: 0, _meleeDur: 0.5,
-      dodgeCd: 99, flying: false, phase: 1, _phase2: isRecrystallized, _rooted: 0
+      dodgeCd: 99, flying: false, phase: 1, _phase2: false, _phase3: false, _rooted: 0,
+      _abilityState: 'idle',
+      _abilityCooldown: 2.2,
+      _abilityRotation: 0
     };
     enemies.push(activeBoss);
-    showBossHUD(
-      isRecrystallized ? '❄️💛 МЕГА-ЖИРИГОРЬ: ЖИРНЫЙ АРМАГЕДДОН 💛❄️' : '💛 ЖИРИГОРЬ — «ИСТИННЫЙ ЖИР» («ЗОЛОТОЙ СТАНДАРТ») 💛',
-      isRecrystallized ? 'ИСПОЛЬЗУЙТЕ ПРОТОКОЛ ТИТАНА МУЛЬТИФРУКТА И УВЕРТЫВАЙТЕСЬ ОТ ЦУНАМИ!' : 'ЗАМОРОЗЬТЕ ЕГО НА [C] ИЛИ ИСПОЛЬЗУЙТЕ КИСЛОТУ ЛИМОНА!'
-    );
+    enterSoloBossArena(activeBoss);
+    showBossHUD('💛 СОЛО-ДУЭЛЬ: АБСОЛЮТНЫЙ ЖИРИГОРЬ (ФАЗА 1/3) 💛', 'ПЕРЕПРЫГИВАЙТЕ ВОЛНЫ ЦУНАМИ! СБИВАЙТЕ ЖИРОВОЙ ПАНЦИРЬ НА [C] / [Q] / [F]!');
     SoundFX.bossRoar();
     return activeBoss;
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ═══ 5. ОБОГАЩЕНИЕ МИРА И КАРТЫ (БИО-КУПОЛА, БЛОКПОСТЫ, ТРАМПЛИНЫ, ГОЛОГРАММЫ)
-  // ═══════════════════════════════════════════════════════════════════════════
-  const worldJumpPads = [];
-  const healingBioDomes = [];
+  // Обработка урона по Финальным Боссам (механика контр-игры, пробития панциря и сбивания каста)
+  const _origDamageEnemyV100 = window.damageEnemy;
+  window.damageEnemy = function (en, dmg, knockVec, popText) {
+    if (!en) return;
 
-  function buildRichWorldLandmarks() {
-    if (typeof scene === 'undefined') return;
-
-    // 1. Зеленые Купола Эко-Восстановления «Мультифрукта» (лечат игрока и восстанавливают энергию внутри)
-    const domeCoords = [[220, -45], [-55, 115], [0, -15]];
-    domeCoords.forEach(([dx, dz]) => {
-      const g = new THREE.Group();
-      g.position.set(dx, 0, dz);
-      const dome = new THREE.Mesh(
-        new THREE.SphereGeometry(18, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
-        new THREE.MeshBasicMaterial({ color: 0x2ecc71, transparent: true, opacity: 0.18, wireframe: true })
-      );
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(17.2, 18.5, 32),
-        new THREE.MeshBasicMaterial({ color: 0x00ff66, side: THREE.DoubleSide })
-      );
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.y = 0.12;
-      const treeCore = new THREE.Mesh(
-        new THREE.ConeGeometry(3.5, 12, 8),
-        createPrototypeShader(0x2ecc71, 0x145a32, 8, 0xadff2f)
-      );
-      treeCore.position.y = 6;
-      g.add(dome, ring, treeCore);
-      scene.add(g);
-      healingBioDomes.push({ pos: new THREE.Vector3(dx, 0, dz), radius: 18, mesh: dome });
-    });
-
-    // 2. Лазерные Ворота и Укрепрайоны CITRUS DEFENSE на главных улицах
-    const gateCoords = [[0, 45, 0], [-90, 0, Math.PI / 2], [90, 0, Math.PI / 2], [0, -110, 0]];
-    const gateMat = createPrototypeShader(0xff7f00, 0x4a1a00, 9, 0xfff200);
-    gateCoords.forEach(([gx, gz, rotY]) => {
-      const gate = new THREE.Group();
-      gate.position.set(gx, 0, gz);
-      gate.rotation.y = rotY;
-      for (let s of [-12, 12]) {
-        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.8, 18, 8), gateMat);
-        pillar.position.set(s, 9, 0);
-        gate.add(pillar);
+    // 1. Механика Панциря Золотого Стандарта у Жиригоря
+    if (en._isSoloJirigory && en._fatCarapaceActive) {
+      if (dmg >= 145 || LEMON_MODE || player._multifruitTitanActive) {
+        en._fatCarapaceActive = false;
+        if (en._carapaceMesh) en._carapaceMesh.visible = false;
+        en._rooted = 3.5; // Оглушение на 3.5 секунды за успешное пробитие!
+        setBossCastBar('💥 ПАНЦИРЬ ЖИРИГОРЯ ПРОБИТ! БОСС ОГЛУШЕН! 💥', 100, true);
+        setTimeout(() => setBossCastBar('', 0, false), 2000);
+        popText = '*💥 ЗОЛОТОЙ ПАНЦИРЬ РАЗБИТ! (ОГЛУШЕН)*';
+        dmg *= 1.5;
+        SoundFX.boom();
+      } else {
+        en.hp = Math.min(en.maxHp, en.hp + 150);
+        popText = '*💛 ПАНЦИРЬ ПОГЛОТИЛ УДАР! (ИСПОЛЬЗУЙТЕ Q / F / C)*';
+        dmg *= 0.1;
       }
-      const crossbar = new THREE.Mesh(new THREE.BoxGeometry(26, 2.2, 2.2), gateMat);
-      crossbar.position.y = 18;
-      gate.add(crossbar);
-      const laserShield = new THREE.Mesh(
-        new THREE.PlaneGeometry(22, 16),
-        new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.18, side: THREE.DoubleSide })
-      );
-      laserShield.position.y = 8.5;
-      gate.add(laserShield);
-      scene.add(gate);
-    });
+    }
 
-    // 3. Прыжковые платформы (Jump Pads) для быстрого подъема на высотки
-    const padCoords = [
-      [0, -24], [-48, -28], [48, -28], [0, 80],
-      [-105, -75], [105, -75], [120, -110], [-140, 40]
-    ];
-    padCoords.forEach(([px, pz]) => {
-      const padGroup = new THREE.Group();
-      padGroup.position.set(px, 0.15, pz);
-      const base = new THREE.Mesh(
-        new THREE.CylinderGeometry(3.0, 3.6, 0.4, 16),
-        createPrototypeShader(0x162868, 0x00f2fe, 2, 0x00f2fe)
-      );
-      const glowRing = new THREE.Mesh(
-        new THREE.TorusGeometry(2.5, 0.18, 8, 24),
-        new THREE.MeshBasicMaterial({ color: 0x00ff66 })
-      );
-      glowRing.rotation.x = Math.PI / 2;
-      glowRing.position.y = 0.28;
-      padGroup.add(base, glowRing);
-      scene.add(padGroup);
-      worldJumpPads.push({ pos: new THREE.Vector3(px, 0, pz), ring: glowRing, cd: 0 });
-    });
+    // 2. Прерывание ультимейта «Сверхновая Жирного Армагеддона» при нанесении урона
+    if (en._isSoloJirigory && en._castingUltimate) {
+      en._ultInterruptDmg = (en._ultInterruptDmg || 0) + dmg * player.comboMult;
+      if (en._ultInterruptDmg >= 3800) {
+        en._castingUltimate = false;
+        en._rooted = 4.0;
+        if (en._sunSphere && en._sunSphere.parent) scene.remove(en._sunSphere);
+        setBossCastBar('🌈 СВЕРХНОВА СБИТА УДАРОМ БАЛАНСА! 🌈', 100, true);
+        setTimeout(() => setBossCastBar('', 0, false), 2000);
+        popText = '*🌈 КАСТ СВЕРХНОВОЙ ПРЕРВАН!*';
+        dmg *= 2.0;
+        SoundFX.devastator();
+      }
+    }
+
+    // 3. Раскол льда x2 по замороженным целям
+    if (en.frozen > 0 && !en._suppressShatterOnFreezeInit && dmg > 15) {
+      dmg *= 2.0;
+      popText = '*💎 РАСКОЛ ЛЬДА! x2*';
+      if (en._iceCubePrison && en.hp - dmg <= 0) {
+        clearTimeout(en._iceCubePrison.timerId);
+        en._iceCubePrison.cleanup();
+        en._iceCubePrison = null;
+      }
+    }
+
+    const res = _origDamageEnemyV100.call(this, en, dmg, knockVec, popText);
+
+    if (en.hp <= 0) {
+      if (en._iceCubePrison) {
+        clearTimeout(en._iceCubePrison.timerId);
+        en._iceCubePrison.cleanup();
+        en._iceCubePrison = null;
+      }
+      if (en._isSoloGrapestasik || en._isSoloJirigory) {
+        _soloBossLock = false;
+        setBossCastBar('', 0, false);
+      }
+    }
+    return res;
+  };
+
+  // ─── ДЕТАЛЬНЫЙ ИИ И УНИКАЛЬНЫЕ СПОСОБНОСТИ СОЛО-БОССОВ ГРЕЙПСТАСИКА И ЖИРИГОРЯ ───
+  function updateSoloPinnacleBossAI(b, dt, now) {
+    if (!b || b.hp <= 0 || !b.group || !b.group.parent) return;
+    if (b.frozen > 0 || b._rooted > 0) return;
+
+    const bPos = b.group.position;
+    const hpPct = b.hp / b.maxHp;
+
+    // ════════════════════════════════════════════════════════════════════════
+    // А) СОЛО-БОСС 1: БИО-ТИТАН ГРЕЙПСТАСИК («ИСТИННАЯ ГОРЕЧЬ»)
+    // ════════════════════════════════════════════════════════════════════════
+    if (b._isSoloGrapestasik) {
+      // Переходы фаз
+      if (hpPct <= 0.65 && !b._phase2) {
+        b._phase2 = true;
+        b.speed = 17.0;
+        showBossHUD('🍇 БИО-ТИТАН ГРЕЙПСТАСИК — ФАЗА 2/3: «ПРОРЫВ СИМБИОТА» 🍇', 'НОВЫЕ АТАКИ: СИНГУЛЯРНОСТЬ ГОРЕЧИ И ТРОЙНОЙ РАЗЛОМ ШИПОВ!');
+        spawnGroundCrackRing(bPos, 0xd252ff, 28);
+        spawnComicPop(bPos.clone().add(new THREE.Vector3(0, 12, 0)), '👾 ФАЗА 2: ИСТИННАЯ ГОРЕЧЬ! 👾', '#d252ff');
+        SoundFX.bossRoar();
+      }
+      if (hpPct <= 0.32 && !b._phase3) {
+        b._phase3 = true;
+        b.speed = 19.5;
+        showBossHUD('🔥 БИО-ТИТАН ГРЕЙПСТАСИК — ФАЗА 3/3: «КОНЕЦ МУЛЬТИФРУКТУ!» 🔥', 'КРА-КА-БУМ! ДРОНЫ РОДОТЕНАНЦ И ХОХЛОРКОВЬ УСИЛИВАЮТ ВАС!');
+        triggerKhokhlorkovReturnAndRodotenanc(bPos.clone());
+      }
+
+      b._abilityCooldown -= dt;
+      if (b._abilityCooldown > 0) return;
+
+      const moveIdx = b._abilityRotation % (b._phase3 ? 5 : (b._phase2 ? 4 : 2));
+      b._abilityRotation++;
+      b._abilityCooldown = b._phase3 ? 3.4 : (b._phase2 ? 4.0 : 4.6);
+
+      if (moveIdx === 0) {
+        // СПОСОБНОСТЬ 1: «ГРОМОВОЙ НАТИСК (ГРООО-ОО-ОМ! ВУ!)» с телеграфированной дорожкой и столбами молний
+        const chargeDir = new THREE.Vector3(player.pos.x - bPos.x, 0, player.pos.z - bPos.z).normalize();
+        const laneMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(5.5, 38),
+          new THREE.MeshBasicMaterial({ color: 0xff0055, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+        );
+        laneMesh.rotation.x = -Math.PI / 2;
+        laneMesh.rotation.z = -Math.atan2(chargeDir.x, chargeDir.z);
+        laneMesh.position.copy(bPos).addScaledVector(chargeDir, 19);
+        laneMesh.position.y = 0.2;
+        scene.add(laneMesh);
+
+        let castT = 0;
+        const castInt = setInterval(() => {
+          castT += 0.05;
+          setBossCastBar('⚡ ГРОМОВОЙ НАТИСК («ГРООО-ОО-ОМ! ВУ!») — УЙДИТЕ С ЛИНИИ! ⚡', (castT / 0.95) * 100, true);
+          if (castT >= 0.95) {
+            clearInterval(castInt);
+            setBossCastBar('', 0, false);
+            scene.remove(laneMesh);
+            laneMesh.geometry.dispose();
+            laneMesh.material.dispose();
+            if (!b.group.parent || b.frozen > 0) return;
+
+            SoundFX.bossRoar();
+            spawnComicPop(bPos.clone().add(new THREE.Vector3(0, 11, 0)), '*⚡ ГРООО-ОО-ОМ! ВУ! ⚡*', '#d252ff');
+            b.vel.x = chargeDir.x * 85;
+            b.vel.z = chargeDir.z * 85;
+
+            for (let s = 1; s <= 5; s++) {
+              setTimeout(() => {
+                if (!b.group.parent) return;
+                const pt = bPos.clone().addScaledVector(chargeDir, s * 5);
+                const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 26, 8), new THREE.MeshBasicMaterial({ color: 0xd252ff }));
+                bolt.position.set(pt.x, 13, pt.z);
+                scene.add(bolt);
+                setTimeout(() => { scene.remove(bolt); bolt.geometry.dispose(); bolt.material.dispose(); }, 300);
+                spawnGroundCrackRing(pt, 0xd252ff, 6.5);
+                if (player.pos.distanceTo(pt) < 6.0) applyDamageToHero(34);
+              }, s * 110);
+            }
+          }
+        }, 50);
+      } else if (moveIdx === 1) {
+        // СПОСОБНОСТЬ 2: «СПИРАЛЬНЫЙ ЛУЧ ГОРЕЧИ» (Горизонтальный лазерный скан на 130 градусов)
+        let castT = 0;
+        const startYaw = Math.atan2(player.pos.x - bPos.x, player.pos.z - bPos.z) - 0.95;
+        const castInt = setInterval(() => {
+          castT += 0.05;
+          setBossCastBar('🔮 СПИРАЛЬНЫЙ ЛУЧ ГОРЕЧИ (ПРЫГАЙТЕ ИЛИ ЗАХОДИТЕ ЗА СПИНУ!) 🔮', (castT / 1.0) * 100, true);
+          if (castT >= 1.0) {
+            clearInterval(castInt);
+            setBossCastBar('', 0, false);
+            if (!b.group.parent || b.frozen > 0) return;
+
+            SoundFX.devastator();
+            const beamGeo = new THREE.CylinderGeometry(0.9, 0.9, 36, 10);
+            beamGeo.rotateX(Math.PI / 2);
+            const beamMesh = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.88 }));
+            scene.add(beamMesh);
+
+            let sweepT = 0;
+            const sweepInt = setInterval(() => {
+              sweepT += 0.04;
+              if (!b.group.parent || sweepT >= 1.0) {
+                clearInterval(sweepInt);
+                scene.remove(beamMesh);
+                beamGeo.dispose();
+                beamMesh.material.dispose();
+                return;
+              }
+              const curYaw = startYaw + sweepT * 1.9;
+              const dir = new THREE.Vector3(Math.sin(curYaw), 0, Math.cos(curYaw));
+              const chest = bPos.clone().add(new THREE.Vector3(0, 3.2, 0));
+              beamMesh.position.copy(chest).addScaledVector(dir, 18);
+              beamMesh.lookAt(chest.clone().addScaledVector(dir, 36));
+
+              // Проверка попадания луча по игроку (если игрок не перепрыгнул выше 4.8м)
+              const toP = player.pos.clone().sub(bPos);
+              const proj = toP.x * dir.x + toP.z * dir.z;
+              if (proj > 0 && proj < 36 && player.pos.y < 4.8) {
+                const perpSq = (toP.x * toP.x + toP.z * toP.z) - proj * proj;
+                if (perpSq < 4.5) applyDamageToHero(16);
+              }
+            }, 30);
+          }
+        }, 50);
+      } else if (moveIdx === 2) {
+        // СПОСОБНОСТЬ 3 (Фаза 2+): «СИНГУЛЯРНОСТЬ ИСТИННОЙ ГОРЕЧИ» (Затягивание + Взрыв 20м)
+        const warnCircle = new THREE.Mesh(
+          new THREE.RingGeometry(1, 20, 36),
+          new THREE.MeshBasicMaterial({ color: 0xb833ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+        );
+        warnCircle.rotation.x = -Math.PI / 2;
+        warnCircle.position.set(bPos.x, 0.22, bPos.z);
+        scene.add(warnCircle);
+
+        let castT = 0;
+        const castInt = setInterval(() => {
+          castT += 0.05;
+          setBossCastBar('🌀 СИНГУЛЯРНОСТЬ ГОРЕЧИ: ВЫРВИТЕСЬ ИЗ КРУГА (20М)! 🌀', (castT / 1.4) * 100, true);
+          warnCircle.scale.setScalar(0.3 + (castT / 1.4) * 0.7);
+          // Гравитационное затягивание игрока к боссу во время каста
+          if (player.pos.distanceTo(bPos) < 34 && player.pos.distanceTo(bPos) > 4) {
+            const pull = bPos.clone().sub(player.pos).normalize();
+            player.pos.x += pull.x * 0.55;
+            player.pos.z += pull.z * 0.55;
+          }
+          if (castT >= 1.4) {
+            clearInterval(castInt);
+            setBossCastBar('', 0, false);
+            scene.remove(warnCircle);
+            warnCircle.geometry.dispose();
+            warnCircle.material.dispose();
+            if (!b.group.parent || b.frozen > 0) return;
+
+            SoundFX.boom();
+            SoundFX.devastator();
+            spawnGroundCrackRing(bPos, 0xff0055, 22);
+            spawnParticles(bPos.clone().add(new THREE.Vector3(0, 3, 0)), 0xb833ff, 35);
+            if (player.pos.distanceTo(bPos) <= 20 && player.pos.y < 7) {
+              applyDamageToHero(48);
+              player.vel.y = 22;
+              spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 3, 0)), '*💥 ПОГЛОЩЁН ГОРЕЧЬЮ!*', '#ff0055');
+            }
+          }
+        }, 50);
+      } else if (moveIdx === 3) {
+        // СПОСОБНОСТЬ 4 (Фаза 2+): «ТРОЙНОЙ РАЗЛОМ ВИНОГРАДНИКА» (3 концентрических кольца шипов)
+        setBossCastBar('🌿 ТРОЙНОЙ РАЗЛОМ ЛОЗ (МАНЕВРИРУЙТЕ МЕЖДУ КОЛЬЦАМИ!) 🌿', 100, true);
+        setTimeout(() => setBossCastBar('', 0, false), 1800);
+        const center = bPos.clone();
+        [
+          { rMin: 2, rMax: 9, delay: 300 },
+          { rMin: 9.5, rMax: 17.5, delay: 850 },
+          { rMin: 18, rMax: 26, delay: 1400 }
+        ].forEach((band) => {
+          setTimeout(() => {
+            if (!b.group.parent || b.frozen > 0) return;
+            SoundFX.boom();
+            const ring = new THREE.Mesh(
+              new THREE.RingGeometry(band.rMin, band.rMax, 32),
+              new THREE.MeshBasicMaterial({ color: 0x2ecc71, transparent: true, opacity: 0.85, side: THREE.DoubleSide })
+            );
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.set(center.x, 0.25, center.z);
+            scene.add(ring);
+            setTimeout(() => { scene.remove(ring); ring.geometry.dispose(); ring.material.dispose(); }, 450);
+
+            const d = Math.hypot(player.pos.x - center.x, player.pos.z - center.z);
+            if (d >= band.rMin && d <= band.rMax && player.pos.y < 4.5) {
+              applyDamageToHero(36);
+              player.vel.y = 18;
+            }
+          }, band.delay);
+        });
+      } else {
+        // СПОСОБНОСТЬ 5 (Фаза 3): «МЕТЕОРИТНЫЙ ШТОРМ ЗАТМЕНИЯ»
+        setBossCastBar('☄️ ШТОРМ ЗАТМЕНИЯ: УКЛОНЯЙТЕСЬ ОТ МЕТЕОРИТОВ ГОРЕЧИ! ☄️', 100, true);
+        setTimeout(() => setBossCastBar('', 0, false), 2500);
+        for (let m = 0; m < 8; m++) {
+          setTimeout(() => {
+            if (!b.group.parent) return;
+            const impactPos = player.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 10, 0, (Math.random() - 0.5) * 10));
+            impactPos.y = 0.2;
+            const marker = new THREE.Mesh(
+              new THREE.RingGeometry(0.5, 5.5, 20),
+              new THREE.MeshBasicMaterial({ color: 0xff0055, side: THREE.DoubleSide })
+            );
+            marker.rotation.x = -Math.PI / 2;
+            marker.position.copy(impactPos);
+            scene.add(marker);
+            setTimeout(() => {
+              scene.remove(marker);
+              marker.geometry.dispose();
+              marker.material.dispose();
+              SoundFX.boom();
+              spawnParticles(impactPos, 0xd252ff, 14);
+              if (Math.hypot(player.pos.x - impactPos.x, player.pos.z - impactPos.z) < 5.5 && player.pos.y < 5) {
+                applyDamageToHero(30);
+              }
+            }, 750);
+          }, m * 280);
+        }
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Б) СОЛО-БОСС 2: АБСОЛЮТНЫЙ ЖИРИГОРЬ («ЗОЛОТОЙ СТАНДАРТ / ЖИРНЫЙ АРМАГЕДДОН»)
+    // ════════════════════════════════════════════════════════════════════════
+    if (b._isSoloJirigory) {
+      if (hpPct <= 0.65 && !b._phase2) {
+        b._phase2 = true;
+        b.speed = 15.0;
+        b.group.scale.setScalar(1.48);
+        if (b._crystalGroup) b._crystalGroup.visible = true;
+        showBossHUD('❄️💛 МЕГА-ЖИРИГОРЬ — ФАЗА 2/3: «ЖИРНАЯ РЕКРИСТАЛЛИЗАЦИЯ» 💛❄️', 'ОН ИСПОЛЬЗОВАЛ ХОЛОД КАК КАТАЛИЗАТОР! ОСТЕРЕГАЙТЕСЬ КРИО-КОПИЙ!');
+        spawnGroundCrackRing(bPos, 0x00f2fe, 30);
+        spawnComicPop(bPos.clone().add(new THREE.Vector3(0, 12, 0)), '*❄️ КРАК-КРАК! ЖИРНАЯ РЕКРИСТАЛЛИЗАЦИЯ! ❄️*', '#00f2fe');
+        SoundFX.bossRoar();
+      }
+      if (hpPct <= 0.32 && !b._phase3) {
+        b._phase3 = true;
+        b.speed = 16.5;
+        activateMultifruitTitanProtocol();
+        showBossHUD('🌈 МЕГА-ЖИРИГОРЬ — ФАЗА 3/3: «ТИТАН МУЛЬТИФРУКТА ПРОТИВ АРМАГЕДДОНА» 🌈', 'ПРОТОКОЛ ТИТАНА АКТИВЕН! СБИВАЙТЕ КАСТ «СВЕРХНОВОЙ СТАНДАРТА»!');
+      }
+
+      if (b._castingUltimate) return;
+
+      b._abilityCooldown -= dt;
+      if (b._abilityCooldown > 0) return;
+
+      const moveIdx = b._abilityRotation % (b._phase3 ? 5 : (b._phase2 ? 4 : 3));
+      b._abilityRotation++;
+      b._abilityCooldown = b._phase3 ? 3.5 : (b._phase2 ? 4.0 : 4.5);
+
+      if (moveIdx === 0) {
+        // СПОСОБНОСТЬ 1: «ЦУНАМИ ЗОЛОТОГО СТАНДАРТА» (Прыжок + 3 расходящихся волны, через которые нужно прыгать!)
+        let castT = 0;
+        b.vel.y = 28;
+        const castInt = setInterval(() => {
+          castT += 0.05;
+          setBossCastBar('💛 ЦУНАМИ ЗОЛОТОГО СТАНДАРТА (ПРЫГАЙТЕ ЧЕРЕЗ 3 ВОЛНЫ!) 💛', (castT / 0.85) * 100, true);
+          if (castT >= 0.85) {
+            clearInterval(castInt);
+            setBossCastBar('', 0, false);
+            if (!b.group.parent || b.frozen > 0) return;
+
+            SoundFX.boom();
+            SoundFX.devastator();
+            spawnComicPop(bPos.clone().add(new THREE.Vector3(0, 10, 0)), '*💛 БА-БАХ! ЦУНАМИ ЖИРА! 💛*', '#fff200');
+            for (let w = 0; w < 3; w++) {
+              setTimeout(() => {
+                if (b.group.parent) spawnJumpableShockwave(bPos.clone(), 38, 24, 0xfff200, 32);
+              }, w * 420);
+            }
+          }
+        }, 50);
+      } else if (moveIdx === 1) {
+        // СПОСОБНОСТЬ 2: «ВЯЗКИЙ ГЕЙЗЕРНЫЙ РАЗЛОМ» (Линия из 5 золотых гейзеров под игроком)
+        setBossCastBar('💛 ВЯЗКИЙ ГЕЙЗЕРНЫЙ РАЗЛОМ (*ШЛЮЮ-ЮП!*) — ДВИГАЙТЕСЬ! 💛', 100, true);
+        setTimeout(() => setBossCastBar('', 0, false), 1500);
+        const dir = new THREE.Vector3(player.pos.x - bPos.x, 0, player.pos.z - bPos.z).normalize();
+        for (let step = 1; step <= 5; step++) {
+          setTimeout(() => {
+            if (!b.group.parent) return;
+            const gPt = bPos.clone().addScaledVector(dir, step * 6.5);
+            spawnGroundCrackRing(gPt, 0xe8b828, 5.5);
+            spawnHazardPool(gPt, 5.0, 0xe8b828, 7.0, true);
+            if (Math.hypot(player.pos.x - gPt.x, player.pos.z - gPt.z) < 5.5 && player.pos.y < 5) {
+              applyDamageToHero(30);
+              player.vel.y = 18;
+            }
+          }, step * 180);
+        }
+      } else if (moveIdx === 2) {
+        // СПОСОБНОСТЬ 3: «ПАНЦИРЬ ЗОЛОТОГО СТАНДАРТА» (Поглощает обычные атаки, пробивается через Q / F / C!)
+        b._fatCarapaceActive = true;
+        if (b._carapaceMesh) b._carapaceMesh.visible = true;
+        setBossCastBar('🛡️ ПАНЦИРЬ ПОГЛОЩЕНИЯ АКТИВЕН! ПРОБЕЙТЕ ЕГО НА [C] / [Q] / [F]! 🛡️', 100, true);
+        spawnComicPop(bPos.clone().add(new THREE.Vector3(0, 11, 0)), '*💛 ИСТИННЫЙ ЖИР ПОГЛОЩАЕТ ВСЁ! 💛*', '#fff200');
+        setTimeout(() => {
+          if (b._fatCarapaceActive) {
+            b._fatCarapaceActive = false;
+            if (b._carapaceMesh) b._carapaceMesh.visible = false;
+            setBossCastBar('', 0, false);
+          }
+        }, 4500);
+      } else if (moveIdx === 3) {
+        // СПОСОБНОСТЬ 4 (Фаза 2+): «АРКТИЧЕСКИЙ ЗАЛП РЕКРИСТАЛЛИЗАЦИИ» (12 ледяных копий по кругу)
+        setBossCastBar('❄️ ЗАЛП ЖИРНОЙ РЕКРИСТАЛЛИЗАЦИИ! ❄️', 100, true);
+        setTimeout(() => setBossCastBar('', 0, false), 1200);
+        SoundFX.devastator();
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2;
+          const pr = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.4, 6), new THREE.MeshBasicMaterial({ color: 0x00f2fe }));
+          pr.rotation.x = Math.PI / 2;
+          pr.position.copy(bPos).add(new THREE.Vector3(0, 4.0, 0));
+          scene.add(pr);
+          projectiles.push({ mesh: pr, vel: new THREE.Vector3(Math.sin(a) * 44, 0, Math.cos(a) * 44), life: 2.5, fromPlayer: false, dmg: 28 });
+        }
+      } else {
+        // СПОСОБНОСТЬ 5 (Фаза 3): «СВЕРХНОВА ЗОЛОТОГО СТАНДАРТА» (Прерываемый ультимейт!)
+        b._castingUltimate = true;
+        b._ultInterruptDmg = 0;
+        const sun = new THREE.Mesh(
+          new THREE.SphereGeometry(5.5, 16, 16),
+          new THREE.MeshBasicMaterial({ color: 0xfff200, wireframe: true })
+        );
+        sun.position.set(bPos.x, 18, bPos.z);
+        scene.add(sun);
+        b._sunSphere = sun;
+
+        let ultT = 0;
+        const ultInt = setInterval(() => {
+          if (!b.group.parent || !b._castingUltimate) {
+            clearInterval(ultInt);
+            if (sun.parent) scene.remove(sun);
+            return;
+          }
+          ultT += 0.05;
+          sun.scale.setScalar(0.5 + (ultT / 3.2) * 1.5);
+          setBossCastBar('☀️ СВЕРХНОВА ЖИРНОГО АРМАГЕДДОНА! АТАКУЙТЕ БОССА ИЛИ ЗАМОРОЗЬТЕ [C]! ☀️', (ultT / 3.2) * 100, true);
+          if (ultT >= 3.2) {
+            clearInterval(ultInt);
+            b._castingUltimate = false;
+            setBossCastBar('', 0, false);
+            if (sun.parent) scene.remove(sun);
+            SoundFX.boom();
+            SoundFX.devastator();
+            spawnGroundCrackRing(bPos, 0xfff200, 38);
+            if (player.pos.distanceTo(bPos) < 34) {
+              applyDamageToHero(65);
+              player.vel.y = 26;
+              spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 4, 0)), '*💥 ВЗРЫВ ЗОЛОТОГО СТАНДАРТА!*', '#fff200');
+            }
+          }
+        }, 50);
+      }
+    }
   }
-  setTimeout(buildRichWorldLandmarks, 350);
+
+  // Встраиваем обновление Соло-Боссов, прыжковых волн и луж в кадр
+  if (typeof updateEnemiesAndVehicles === 'function') {
+    const _origUpdateEnemiesV100 = window.updateEnemiesAndVehicles;
+    window.updateEnemiesAndVehicles = function (dt, now) {
+      // Если идет соло-битва с финальным боссом, удаляем любых случайно появившихся мелких врагов
+      if (_soloBossLock && activeBoss && enemies.length > 1) {
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          if (enemies[i] !== activeBoss) {
+            if (enemies[i].group && enemies[i].group.parent) scene.remove(enemies[i].group);
+            enemies.splice(i, 1);
+          }
+        }
+      }
+
+      for (let i = 0; i < enemies.length; i++) {
+        const en = enemies[i];
+        if (en.frozen > 0) {
+          en.frozen -= dt;
+          en._rooted = Math.max(en._rooted || 0, en.frozen);
+          en.vel.set(0, 0, 0);
+          en._telegraphT = 0;
+          en.meleeAnim = 0;
+          if (en._frozenLockedPos) en.group.position.copy(en._frozenLockedPos);
+          if (en._iceCubePrison && en._iceCubePrison.group) {
+            en._iceCubePrison.group.position.copy(en.group.position);
+          }
+          if (en.frozen <= 0 && en._iceCubePrison) {
+            clearTimeout(en._iceCubePrison.timerId);
+            en._iceCubePrison.cleanup();
+            en._iceCubePrison = null;
+          }
+        }
+      }
+
+      _origUpdateEnemiesV100.apply(this, arguments);
+
+      if (activeBoss && (activeBoss._isSoloGrapestasik || activeBoss._isSoloJirigory)) {
+        updateSoloPinnacleBossAI(activeBoss, dt, now);
+      }
+
+      // Обновление расходящихся колец Цунами (через которые нужно перепрыгивать!)
+      for (let i = shockwaveRings.length - 1; i >= 0; i--) {
+        const sw = shockwaveRings[i];
+        sw.radius += sw.speed * dt;
+        sw.mesh.scale.setScalar(sw.radius);
+        const distP = Math.hypot(player.pos.x - sw.center.x, player.pos.z - sw.center.z);
+        if (!sw.hitPlayer && Math.abs(distP - sw.radius) < 1.8 && player.pos.y < 2.6) {
+          sw.hitPlayer = true;
+          applyDamageToHero(sw.dmg);
+          player.vel.y = 16;
+          spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 3, 0)), '*🌊 СБИТ ВОЛНОЙ (ПРЫГАЙТЕ ВЫШЕ)!*', '#fff200');
+        }
+        if (sw.radius >= sw.maxRadius) {
+          scene.remove(sw.mesh);
+          sw.mesh.geometry.dispose();
+          sw.mesh.material.dispose();
+          shockwaveRings.splice(i, 1);
+        }
+      }
+
+      // Обновление луж на земле
+      for (let i = worldHazards.length - 1; i >= 0; i--) {
+        const h = worldHazards[i];
+        h.life -= dt;
+        h.mesh.material.opacity = Math.max(0, 0.68 * (h.life / h.maxLife));
+        if (player.pos.y < 1.5 && Math.hypot(player.pos.x - h.pos.x, player.pos.z - h.pos.z) < h.radius) {
+          if (h.isFatSlow) {
+            player.vel.x *= 0.78;
+            player.vel.z *= 0.78;
+          }
+          if (Math.random() < dt * 2.2) applyDamageToHero(7);
+        }
+        if (h.life <= 0) {
+          scene.remove(h.mesh);
+          h.mesh.geometry.dispose();
+          h.mesh.material.dispose();
+          worldHazards.splice(i, 1);
+        }
+      }
+    };
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // ═══ 6. БОЛЬШАЯ СЮЖЕТНАЯ КАМПАНИЯ ИЗ 16 РАЗНООБРАЗНЫХ ГЛАВ
+  // ═══ 5. НАДЕЖНАЯ 12-ГЛАВНАЯ СЮЖЕТНАЯ КАМПАНИЯ (БЕЗ НЕПРОХОДИМЫХ БАГОВ)
   // ═══════════════════════════════════════════════════════════════════════════
   const StoryCampaign = {
     chapter: 1,
-    totalChapters: 16,
+    totalChapters: 12,
     completed: false,
-    mode: 'destroy', // 'destroy' | 'defend' | 'hack' | 'collect' | 'boss'
+    mode: 'destroy',
     objectives: [],
-    collectibles: [],
     hackZones: [],
     defendTimer: 0,
     defendCore: null,
@@ -1819,7 +1922,7 @@
     waypointRing: null,
     skyVortex: null,
     rodotenancDrones: null,
-    targetPos: new THREE.Vector3(0, 0, -65),
+    targetPos: new THREE.Vector3(0, 0, -35),
     bossEntity: null
   };
   window.StoryCampaign = StoryCampaign;
@@ -1828,11 +1931,11 @@
   storyHudEl.id = 'story-campaign-hud';
   storyHudEl.style.cssText =
     'position:fixed;top:54px;left:50%;transform:translateX(-50%) skewX(-4deg);z-index:25;' +
-    'min-width:480px;max-width:720px;background:linear-gradient(135deg,rgba(18,6,28,.95),rgba(40,10,18,.92));' +
+    'min-width:480px;max-width:740px;background:linear-gradient(135deg,rgba(18,6,28,.95),rgba(40,10,18,.92));' +
     'border:3px solid #000;outline:3px solid #f9ca24;padding:8px 18px;text-align:center;' +
     'box-shadow:0 8px 25px rgba(0,0,0,.85),6px 6px 0 #000;pointer-events:auto;';
   storyHudEl.innerHTML =
-    '<div id="story-ch-title" style="font-family:Bangers,Impact,sans-serif;font-size:19px;color:#f9ca24;letter-spacing:1.5px;text-shadow:2px 2px 0 #000;">📖 ГЛАВА 1/16: ПРОБУЖДЕНИЕ ОРАНЖ</div>' +
+    '<div id="story-ch-title" style="font-family:Bangers,Impact,sans-serif;font-size:19px;color:#f9ca24;letter-spacing:1.5px;text-shadow:2px 2px 0 #000;">📖 ГЛАВА 1/12: ПРОБУЖДЕНИЕ ОРАНЖ</div>' +
     '<div id="story-ch-desc" style="font-size:12px;font-weight:900;color:#fff;margin-top:2px;">Уничтожьте 3 Якоря Цитрус Дефенс</div>' +
     '<div id="story-ch-dist" style="font-size:11px;font-weight:900;color:#00f2fe;margin-top:3px;">📍 ДО ЦЕЛИ: 0 М</div>';
   document.body.appendChild(storyHudEl);
@@ -1891,8 +1994,9 @@
   }
 
   function spawnStoryObjectiveConstruct(x, y, z, kind) {
+    const safePt = getSafeOpenGroundPos(x, z, 6);
     const g = new THREE.Group();
-    g.position.set(x, y, z);
+    g.position.set(safePt.x, y, safePt.z);
 
     if (kind === 'anchor') {
       const pylonMat = createPrototypeShader(0xff7f00, 0x5a2000, 2, 0xfff200);
@@ -1902,12 +2006,6 @@
       const core = new THREE.Mesh(new THREE.OctahedronGeometry(2.4, 1), new THREE.MeshBasicMaterial({ color: 0xfff200 }));
       core.position.y = 12.5;
       g.add(core);
-      const shieldDome = new THREE.Mesh(
-        new THREE.SphereGeometry(6.5, 12, 10),
-        new THREE.MeshBasicMaterial({ color: 0xff8f20, transparent: true, opacity: 0.25, wireframe: true })
-      );
-      shieldDome.position.y = 7;
-      g.add(shieldDome);
     } else if (kind === 'acid_dreadnought') {
       const orbMat = createPrototypeShader(0xff7f00, 0x9a3800, 4, 0x00ff66);
       const sphere = addInkOutline(new THREE.Mesh(new THREE.SphereGeometry(5.5, 16, 16), orbMat), 1.04);
@@ -1915,20 +2013,28 @@
       const acidVat = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.4, 3.2, 12), new THREE.MeshBasicMaterial({ color: 0x44ffaa }));
       acidVat.position.set(0, -4.5, 0);
       g.add(acidVat);
+    } else if (kind === 'shrekich_server') {
+      // Серверная башня Шрекича с фиолетовым вирусным ядром (очищается ИЛИ стоянием рядом, ИЛИ ударом!)
+      const srvMat = createPrototypeShader(0x0a2e1c, 0x00ff66, 2, 0x00f2fe);
+      const tower = new THREE.Mesh(new THREE.BoxGeometry(3.2, 8.5, 3.2), srvMat);
+      tower.position.y = 4.25;
+      g.add(tower);
+      const virusCore = new THREE.Mesh(new THREE.SphereGeometry(2.4, 12, 12), new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }));
+      virusCore.position.y = 6.5;
+      g.add(virusCore);
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(12.5, 14.0, 32),
+        new THREE.MeshBasicMaterial({ color: 0x00f2fe, side: THREE.DoubleSide })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.25;
+      g.add(ring);
     } else if (kind === 'symbiote_hive') {
-      // Фиолетовый улей симбиота Грейпстасика (Глава 9)
       const hiveMat = createPrototypeShader(0x4a1268, 0x180028, 1, 0xff00ff);
       const mound = addInkOutline(new THREE.Mesh(new THREE.ConeGeometry(4.8, 11, 10), hiveMat), 1.04);
       mound.position.y = 5.5;
       g.add(mound);
-      for (let i = 0; i < 6; i++) {
-        const spore = new THREE.Mesh(new THREE.SphereGeometry(1.1, 8, 8), new THREE.MeshBasicMaterial({ color: 0xd252ff }));
-        const a = (i / 6) * Math.PI * 2;
-        spore.position.set(Math.cos(a) * 3.5, 3 + (i % 2) * 2.5, Math.sin(a) * 3.5);
-        g.add(spore);
-      }
     } else if (kind === 'fat_geyser') {
-      // Золотой гейзер био-полимера Жиригоря (Глава 12)
       const fatMat = createPrototypeShader(0xe8b828, 0x8a5800, 4, 0xfff200);
       const crater = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 5.0, 6, 12), fatMat);
       crater.position.y = 3;
@@ -1937,7 +2043,6 @@
       fountain.position.y = 10;
       g.add(fountain);
     } else if (kind === 'arctic_pylon') {
-      // Арктический пилон рекристаллизации (Глава 15)
       const iceMat = new THREE.MeshPhongMaterial({ color: 0x18c8ff, emissive: 0x053858, transparent: true, opacity: 0.8 });
       const shard = new THREE.Mesh(new THREE.ConeGeometry(3.8, 16, 6), iceMat);
       shard.position.y = 8;
@@ -1945,7 +2050,7 @@
     }
 
     scene.add(g);
-    const hpVal = kind === 'acid_dreadnought' ? 11000 : 4200;
+    const hpVal = kind === 'acid_dreadnought' ? 9500 : (kind === 'shrekich_server' ? 1600 : 3500);
     const constructEnemy = {
       type: kind === 'acid_dreadnought' ? 'heli' : 'tank',
       _isStoryConstruct: true,
@@ -1955,53 +2060,14 @@
       maxHp: hpVal,
       vel: new THREE.Vector3(),
       speed: kind === 'acid_dreadnought' ? 7 : 0,
-      radius: kind === 'acid_dreadnought' ? 5.8 : 4.2,
-      attackCd: 2.2,
+      radius: kind === 'acid_dreadnought' ? 5.8 : 4.4,
+      attackCd: 99,
       dodgeCd: 99,
       flying: kind === 'acid_dreadnought',
       _rooted: 0
     };
     enemies.push(constructEnemy);
     return constructEnemy;
-  }
-
-  // Создание точки взлома (Hack Zone) для Главы 7
-  function spawnHackZone(x, z) {
-    const g = new THREE.Group();
-    g.position.set(x, 0, z);
-    const term = new THREE.Mesh(new THREE.BoxGeometry(2.2, 4.5, 2.2), createPrototypeShader(0x162868, 0x00f2fe, 2, 0x00ff66));
-    term.position.y = 2.25;
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(7.5, 8.5, 32),
-      new THREE.MeshBasicMaterial({ color: 0x00f2fe, side: THREE.DoubleSide })
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.2;
-    g.add(term, ring);
-    scene.add(g);
-    return { group: g, ring, pos: new THREE.Vector3(x, 0, z), progress: 0, hacked: false };
-  }
-
-  // Создание канистры Кислотного Катализатора на крышах для Главы 14
-  function spawnAcidCanister(x, y, z) {
-    const g = new THREE.Group();
-    g.position.set(x, y + 1.8, z);
-    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 2.6, 12), new THREE.MeshBasicMaterial({ color: 0x66ff00 }));
-    const halo = new THREE.Mesh(new THREE.SphereGeometry(1.8, 10, 10), new THREE.MeshBasicMaterial({ color: 0x44ffaa, wireframe: true }));
-    g.add(cyl, halo);
-    scene.add(g);
-    return { group: g, pos: new THREE.Vector3(x, y + 1.8, z), collected: false };
-  }
-
-  function clearMissionProps() {
-    StoryCampaign.hackZones.forEach((hz) => { if (hz.group.parent) scene.remove(hz.group); });
-    StoryCampaign.hackZones = [];
-    StoryCampaign.collectibles.forEach((c) => { if (c.group.parent) scene.remove(c.group); });
-    StoryCampaign.collectibles = [];
-    if (StoryCampaign.defendCore && StoryCampaign.defendCore.parent) {
-      scene.remove(StoryCampaign.defendCore);
-      StoryCampaign.defendCore = null;
-    }
   }
 
   function triggerKhokhlorkovReturnAndRodotenanc(centerPos) {
@@ -2026,20 +2092,7 @@
     scene.add(droneTriGroup);
     StoryCampaign.rodotenancDrones = droneTriGroup;
 
-    const allyCarrot = createCarrotGiantMesh();
-    const clubMat = createPrototypeShader(0x8b5a2b, 0x3e1a04, 7, 0x2ecc71);
-    if (allyCarrot.userData && allyCarrot.userData.armL && allyCarrot.userData.armR) {
-      for (let arm of [allyCarrot.userData.armL, allyCarrot.userData.armR]) {
-        const club = addInkOutline(new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.25, 3.8, 7), clubMat), 1.05);
-        club.position.set(0, -2.2, 1.2);
-        club.rotation.x = Math.PI / 2.3;
-        arm.elbow.add(club);
-      }
-    }
-    droneTriGroup.add(allyCarrot);
-    allyCarrot.position.set(0, -3.2, 0);
-
-    spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 6, 0)), '🌈 КРА-КА-БУМ! ХОХЛОРКОВЬ ВЕРНУЛСЯ!', '#2ecc71');
+    spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 6, 0)), '🌈 КРА-КА-БУМ! КОД РОДОТЕНАНЦ АКТИВЕН!', '#2ecc71');
     SoundFX.devastator();
     SoundFX.boom();
   }
@@ -2068,14 +2121,19 @@
       player._titanAuraMesh = auraGroup;
     }
 
-    spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 5.5, 0)), '🧬 ПРОТОКОЛ: ТИТАН МУЛЬТИФРУКТА АКТИВИРОВАН!', '#7cfc00');
+    spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 5.5, 0)), '🧬 ПРОТОКОЛ: ТИТАН МУЛЬТИФРУКТА АКТИВЕН!', '#7cfc00');
     SoundFX.devastator();
     triggerHitstopAndChroma(0.18, 1.2, 1.6);
     updateHUD();
   }
 
   function startStoryChapter(ch) {
-    clearMissionProps();
+    _soloBossLock = false;
+    setBossCastBar('', 0, false);
+    if (StoryCampaign.defendCore && StoryCampaign.defendCore.parent) {
+      scene.remove(StoryCampaign.defendCore);
+      StoryCampaign.defendCore = null;
+    }
     StoryCampaign.chapter = ch;
     StoryCampaign.objectives = [];
     StoryCampaign.bossEntity = null;
@@ -2087,26 +2145,25 @@
     switch (ch) {
       case 1:
         StoryCampaign.mode = 'destroy';
-        titleEl.innerText = '📖 ГЛАВА 1/16: ПРОБУЖДЕНИЕ ОРАНЖ';
+        titleEl.innerText = '📖 ГЛАВА 1/12: ПРОБУЖДЕНИЕ ОРАНЖ';
         descEl.innerText = 'Уничтожьте 3 Якоря Цитрус Дефенс вокруг Штаба BI';
         showComicCutsceneBanner(
           'ЧАСТЬ 5: АПЕЛЬСИНОВАЯ ОРДА', '🍊', '#ff7f00',
-          '<b>Грейпстасик:</b> «Я, Грейпстасик, призываю вас! Вы — моя цитрусовая армия! Якоря Цитрус Дефенс... их единственная цель — уничтожение!»'
+          '<b>Грейпстасик:</b> «Я, Грейпстасик, призываю вас! Якоря Цитрус Дефенс... их единственная цель — уничтожение!»'
         );
-        [[0, -45], [-68, 22], [68, 22]].forEach(([x, z]) => {
+        [[0, -35], [-55, 18], [55, 18]].forEach(([x, z]) => {
           StoryCampaign.objectives.push(spawnStoryObjectiveConstruct(x, 0, z, 'anchor'));
-          spawnCitrusSoldier(x + 6, z + 6, 'leader');
         });
         break;
 
       case 2:
         StoryCampaign.mode = 'defend';
-        StoryCampaign.defendTimer = 35.0;
-        titleEl.innerText = '📖 ГЛАВА 2/16: ОБОРОНА ШТАБА BANANA INDUSTRIES';
-        descEl.innerText = 'Защищайте Ядро Синтеза BI в течение 35 секунд от штурма Сентинелов!';
+        StoryCampaign.defendTimer = 25.0;
+        titleEl.innerText = '📖 ГЛАВА 2/12: ОБОРОНА ШТАБА BANANA INDUSTRIES';
+        descEl.innerText = 'Удерживайте периметр Ядра Синтеза BI в течение 25 секунд!';
         showComicCutsceneBanner(
           'ОСАДА ШТАБА BI', '🛡️', '#00f2fe',
-          '<b>Шрекич ИИ:</b> «Внимание! Апельсиновые легионеры прорвали периметр! Не дай им разрушить Центральное Ядро Синтеза в течение 35 секунд!»'
+          '<b>Шрекич ИИ:</b> «Апельсиновые Сентинелы штурмуют площадь! Продержись 25 секунд, пока я активирую защитный купол!»'
         );
         const coreGroup = new THREE.Mesh(
           new THREE.OctahedronGeometry(3.5, 1),
@@ -2116,232 +2173,128 @@
         scene.add(coreGroup);
         StoryCampaign.defendCore = coreGroup;
         StoryCampaign.targetPos.set(0, 0, -15);
-        for (let i = 0; i < 5; i++) {
-          const a = (i / 5) * Math.PI * 2;
-          spawnCitrusSoldier(Math.cos(a) * 26, -15 + Math.sin(a) * 26, i % 2 === 0 ? 'brawler' : 'mandarin');
-        }
         break;
 
       case 3:
         StoryCampaign.mode = 'destroy';
-        titleEl.innerText = '📖 ГЛАВА 3/16: ПЕРЕХВАТ БРОНЕКОНВОЯ CITRUS DEFENSE';
-        descEl.innerText = 'Уничтожьте 3 бронетранспортёра APC Цитрус Дефенс до подхода подкреплений!';
+        titleEl.innerText = '📖 ГЛАВА 3/12: ПЕРЕХВАТ БРОНЕКОНВОЯ CITRUS DEFENSE';
+        descEl.innerText = 'Уничтожьте 3 бронетранспортёра APC Цитрус Дефенс!';
         showComicCutsceneBanner(
-          'КОНВОЙ НА МАРШЕ', '🚜', '#ff9f1a',
-          '<b>Капитан Перец:</b> «Тяжёлая бронетехника Цитрус Дефенс движется к площади! Разнесём их бронеколонну в щепки!»'
+          'АРМИЯ НА МАРШЕ', '🚜', '#ff9f1a',
+          '<b>Orange Captain:</b> «Банан-Индастриз — это вчера! Цитрус Дефенс — это завтра!»'
         );
-        [[-55, 75], [0, 95], [55, 75]].forEach(([x, z]) => {
-          spawnCitrusAPC(x, z);
+        [[-45, 70], [0, 85], [45, 70]].forEach(([x, z]) => {
+          const pt = getSafeOpenGroundPos(x, z, 6);
+          spawnCitrusAPC(pt.x, pt.z);
           StoryCampaign.objectives.push(enemies[enemies.length - 1]);
         });
         break;
 
       case 4:
         StoryCampaign.mode = 'destroy';
-        titleEl.innerText = '📖 ГЛАВА 4/16: АРМИЯ НА МАРШЕ — ORANGE CAPTAIN';
-        descEl.innerText = 'Разгромите элитную фалангу Orange Captain и его Джаггернаутов!';
+        titleEl.innerText = '📖 ГЛАВА 4/12: НОВАЯ УГРОЗА — КИСЛОТНЫЙ ДРЕДНОУТ';
+        descEl.innerText = 'Сбейте летающий Кислотный Апельсин-Дредноут над площадью!';
         showComicCutsceneBanner(
-          'АРМИЯ НА МАРШЕ', '🤖', '#eb2f06',
-          '<b>Orange Captain:</b> «Банан-Индастриз — это вчера! Цитрус Дефенс — это завтра! Вперёд, Джаггернауты!»'
+          'ЧАСТЬ 6: КИСЛОТНЫЙ ТРИУМФ', '🍇', '#6a1b9a',
+          '<b>Грейпстасик:</b> «Банан-Индастриз... весь этот сладкий, мягкий мир... он будет стёрт!»'
         );
-        for (let i = 0; i < 6; i++) {
-          const a = (i / 6) * Math.PI * 2;
-          spawnCitrusSoldier(Math.cos(a) * 20, 110 + Math.sin(a) * 20, i % 2 === 0 ? 'brawler' : 'leader');
-          StoryCampaign.objectives.push(enemies[enemies.length - 1]);
-        }
+        StoryCampaign.objectives.push(spawnStoryObjectiveConstruct(0, 14, 40, 'acid_dreadnought'));
         break;
 
       case 5:
-        StoryCampaign.mode = 'destroy';
-        titleEl.innerText = '📖 ГЛАВА 5/16: НОВАЯ УГРОЗА — КИСЛОТНЫЙ ДРЕДНОУТ';
-        descEl.innerText = 'Сбейте Кислотный Апельсин-Дредноут и рой Виноградных Пауков!';
-        showComicCutsceneBanner(
-          'ЧАСТЬ 6: КИСЛОТНЫЙ ТРИУМФ', '🍇', '#6a1b9a',
-          '<b>Грейпстасик:</b> «Банан-Индастриз... весь этот сладкий, мягкий мир... он будет стёрт! Выпускайте Кислотный Дредноут и пауков!»'
-        );
-        StoryCampaign.objectives.push(spawnStoryObjectiveConstruct(-85, 18, -75, 'acid_dreadnought'));
-        for (let i = 0; i < 4; i++) {
-          StoryCampaign.objectives.push(window.spawnGrapeSpiderDrone(-85 + (i - 1.5) * 10, -75));
-        }
-        break;
-
-      case 6:
-        StoryCampaign.mode = 'boss';
-        titleEl.innerText = '📖 ГЛАВА 6/16: БОСС — КИСЛОТНЫЙ ЦЕНТУРИОН';
-        descEl.innerText = 'Пробейте адаптивный щит Центуриона мощными атаками [Q]/[F] и победите его!';
-        showComicCutsceneBanner(
-          'ОГНЕННЫЙ УДАР ПЕРЦА... ПРОВАЛ?', '🛡️', '#8e44ad',
-          '<b>Кислотный Центурион:</b> «Слишком мягкие! Мой перец — это АБСОЛЮТНОЕ ПИТАНИЕ! Обычные удары не пробьют мою броню!»'
-        );
-        StoryCampaign.bossEntity = window.spawnAcidCenturionBoss(85, 95);
-        break;
-
-      case 7:
-        StoryCampaign.mode = 'hack';
-        titleEl.innerText = '📖 ГЛАВА 7/16: ПЕРЕЗАГРУЗКА ШРЕКИЧА ИИ (ВЗЛОМ ТЕРМИНАЛОВ)';
-        descEl.innerText = 'Удерживайте позиции внутри 3 синих колец связи, чтобы очистить код Шрекича!';
+        // ИСПРАВЛЕННАЯ МИССИЯ С СЕРВЕРАМИ ШРЕКИЧА: открытая площадь Даунтауна + очистка ударом ИЛИ стоянием рядом!
+        StoryCampaign.mode = 'shrekich_servers';
+        titleEl.innerText = '📖 ГЛАВА 5/12: ОЧИСТКА СЕРВЕРОВ ШРЕКИЧА ИИ';
+        descEl.innerText = 'Разбейте вирусные ядра на 3 серверах Шрекича (атакой или подойдите вплотную)!';
         showComicCutsceneBanner(
           'ШРЕКИЧ ИИ ВЗЛОМАН!', '💻', '#00aa44',
-          '<b>Шрекич ИИ:</b> «АНАЛИЗ: ПЕРЕГРУЗКА ДАННЫХ... Вирус Грейпстасика блокирует мои протоколы! Зайди в кольца ретрансляторов, чтобы перезагрузить меня!»'
+          '<b>Шрекич ИИ:</b> «Вирус Грейпстасика заразил 3 моих серверных узла на главной площади! Просто сбей фиолетовые вирусные наросты ударом или подойди к ним!»'
         );
-        [[95, -135], [140, -135], [118, -175]].forEach(([x, z]) => {
-          StoryCampaign.hackZones.push(spawnHackZone(x, z));
-          spawnCitrusSoldier(x + 5, z, 'sniper');
+        [[0, 32], [-42, 10], [42, 10]].forEach(([x, z]) => {
+          StoryCampaign.objectives.push(spawnStoryObjectiveConstruct(x, 0, z, 'shrekich_server'));
         });
         break;
 
-      case 8:
-        StoryCampaign.mode = 'boss';
-        titleEl.innerText = '📖 ГЛАВА 8/16: БОСС — ГРЕЙПСТАСИК НА ТАНКОВЫХ ГУСЕНИЦАХ';
-        descEl.innerText = 'Сокрушите Гусеничный Штурмовик Грейпстасика на северной базе!';
+      case 6:
+        StoryCampaign.mode = 'destroy';
+        titleEl.innerText = '📖 ГЛАВА 6/12: ЧАСТЬ XI — ПРОРЫВ СИМБИОТА';
+        descEl.innerText = 'Уничтожьте 3 Улья Симбиота Грейпстасика!';
         showComicCutsceneBanner(
-          'ГРООО-ОО-ОМ! ВУ!', '🍇', '#5b1e82',
-          '<b>Грейпстасик:</b> «Я Грейпстасик! Я — твой ад! Я уничтожу вашу "Команду"! Проект "Кислотный Тандем" — в бой!»'
+          'ПРОРЫВ ИЗ ПРОШЛОГО — КРАШШШШШ!', '🍋', '#f9ca24',
+          '<b>Димон Лимон:</b> «Энергетический фон зашкаливает! Из ульев прорывается сам Грейпстасик!»'
         );
-        StoryCampaign.bossEntity = window.spawnGrapestasikBoss(0, -110);
+        [[0, -40], [-48, -20], [48, -20]].forEach(([x, z]) => {
+          StoryCampaign.objectives.push(spawnStoryObjectiveConstruct(x, 0, z, 'symbiote_hive'));
+        });
+        break;
+
+      case 7:
+        // ПЕРВЫЙ ГЛАВНЫЙ ФИНАЛЬНЫЙ БОСС (СОЛО 1 НА 1): БИО-ТИТАН ГРЕЙПСТАСИК!
+        StoryCampaign.mode = 'boss';
+        titleEl.innerText = '🔥 ГЛАВА 7/12 (СОЛО-БОСС): БИО-ТИТАН ГРЕЙПСТАСИК';
+        descEl.innerText = 'СОЛО-ДУЭЛЬ 1 НА 1: Победите 3-фазного Био-Титана Грейпстасика («Истинная Горечь»)!';
+        showComicCutsceneBanner(
+          'СОЛО-ДУЭЛЬ: РОЖДЕНИЕ ГРЕЙПСТАСИКА!', '👾', '#3a1058',
+          '<b>Био-Грейпстасик:</b> «Выходим один на один! Ваша "Симбиоз" — это гниль! Я перепрограммирую этот мир на ИСТИННУЮ ГОРЕЧЬ!»',
+          9500
+        );
+        StoryCampaign.bossEntity = window.spawnSoloFinalGrapestasik(0, -25);
+        break;
+
+      case 8:
+        StoryCampaign.mode = 'destroy';
+        titleEl.innerText = '📖 ГЛАВА 8/12: ЧАСТЬ XII — ЛИПКОЕ ВТОРЖЕНИЕ';
+        descEl.innerText = 'Разрушьте 3 Золотых Гейзера био-полимера Жиригоря!';
+        showComicCutsceneBanner(
+          'НОВОЕ СОСТОЯНИЕ ВЕЩЕСТВА — *ШЛЮЮ-ЮП*', '💛', '#d4a017',
+          '<b>Димон Лимон:</b> «Это не кислота Грейпстасика! Она слишком густая... ВНИМАНИЕ: Обнаружен жировой био-полимер Жиригоря!»'
+        );
+        [[0, 45], [-45, 25], [45, 25]].forEach(([x, z]) => {
+          StoryCampaign.objectives.push(spawnStoryObjectiveConstruct(x, 0, z, 'fat_geyser'));
+        });
         break;
 
       case 9:
         StoryCampaign.mode = 'destroy';
-        titleEl.innerText = '📖 ГЛАВА 9/16: ЧАСТЬ XI — АНОМАЛИЯ В ДЖУНГЛЯХ';
-        descEl.innerText = 'Уничтожьте 4 Фиолетовых Улья Симбиота в парковом секторе!';
+        titleEl.innerText = '📖 ГЛАВА 9/12: КАТАЛИЗАТОРЫ ЖИРНОЙ РЕКРИСТАЛЛИЗАЦИИ';
+        descEl.innerText = 'Разбейте 3 Арктических Пилона до начала Жирного Армагеддона!';
         showComicCutsceneBanner(
-          'СКАНИРОВАНИЕ КОДА ХОХЛОРКОВА', '🍋', '#f9ca24',
-          '<b>Димон Лимон:</b> «Штаб функционирует, но я вижу в Джунглях аномалию... *Клик-Клик* Энергетический фон зашкаливает! Что-то *КИСЛОЕ* и *ГОРЬКОЕ*!»'
+          'ХРУСТЬ-ХРУСТЬ... ОН ИСПОЛЬЗУЕТ ХОЛОД!', '❄️', '#00f2fe',
+          '<b>Егорбанан:</b> «Шрекич! Он использует арктический холод как катализатор для жирной рекристаллизации! Уничтожь ледяные пилоны!»'
         );
-        [[195, -35], [235, -35], [215, -75], [215, 5]].forEach(([x, z]) => {
-          StoryCampaign.objectives.push(spawnStoryObjectiveConstruct(x, 0, z, 'symbiote_hive'));
-          window.spawnGrapeSpiderDrone(x + 4, z + 4);
+        [[-45, -35], [45, -35], [0, -65]].forEach(([x, z]) => {
+          StoryCampaign.objectives.push(spawnStoryObjectiveConstruct(x, 0, z, 'arctic_pylon'));
         });
         break;
 
       case 10:
+        // ВТОРОЙ ГЛАВНЫЙ ФИНАЛЬНЫЙ БОСС (СОЛО 1 НА 1): АБСОЛЮТНЫЙ ЖИРИГОРЬ!
         StoryCampaign.mode = 'boss';
-        titleEl.innerText = '📖 ГЛАВА 10/16: РОЖДЕНИЕ БИО-ГРЕЙПСТАСИКА («ИСТИННАЯ ГОРЕЧЬ»)';
-        descEl.innerText = 'Выстойте против Био-Монстра Грейпстасика и сбейте ему 40% здоровья!';
+        titleEl.innerText = '🔥 ФИНАЛ КАМПАНИИ (СОЛО-БОСС): АБСОЛЮТНЫЙ ЖИРИГОРЬ';
+        descEl.innerText = 'СОЛО-ДУЭЛЬ 1 НА 1: Сокрушите 3-фазного Абсолютного Жиригоря!';
         showComicCutsceneBanner(
-          'ПРОРЫВ ИЗ ПРОШЛОГО — КРАШШШШШ!', '👾', '#3a1058',
-          '<b>Био-Грейпстасик:</b> «"Ягодный Банан"! "Огненный Перец"! Вы думали, что баланс — это ваша игра? Ваша "Симбиоз" — это гниль! Я перепрограммирую этот мир на ИСТИННУЮ ГОРЕЧЬ!»',
-          9500
-        );
-        if (!StoryCampaign.skyVortex) {
-          const vortex = new THREE.Mesh(
-            new THREE.RingGeometry(8, 65, 32),
-            new THREE.MeshBasicMaterial({ color: 0xb833ff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, wireframe: true })
-          );
-          vortex.rotation.x = Math.PI / 2;
-          vortex.position.set(0, 95, -65);
-          scene.add(vortex);
-          StoryCampaign.skyVortex = vortex;
-        }
-        StoryCampaign.bossEntity = window.spawnBioMonsterGrapestasik(0, -65);
-        break;
-
-      case 11:
-        StoryCampaign.mode = 'boss';
-        titleEl.innerText = '📖 ГЛАВА 11/16: КРА-КА-БУМ! ВОЗВРАЩЕНИЕ ХОХЛОРКОВИ';
-        descEl.innerText = 'Добивайте Био-Грейпстасика вместе с Хохлорковью и треугольником дронов «Родотенанц»!';
-        showComicCutsceneBanner(
-          'ПОСЛЕДНЯЯ ЛИНИЯ ОБОРОНЫ — КРА-КА-БУМ!', '🥕', '#2ecc71',
-          '<b>Хохлорковь:</b> «Вы забыли обо Мне, Грейпстасик. Я помню Каждый Грамм Горечи. И я Поглотил её!»<br><b>Димон Лимон:</b> «*КОД "РОДОТЕНАНЦ-ВОССТАНОВЛЕНИЕ"*! Вместе мы — МУЛЬТИФРУКТ-ПОБЕДИТЕЛЬ!»',
-          9500
-        );
-        const bioBoss = window.spawnBioMonsterGrapestasik(0, -65);
-        bioBoss.hp = Math.round(bioBoss.maxHp * 0.6);
-        StoryCampaign.bossEntity = bioBoss;
-        triggerKhokhlorkovReturnAndRodotenanc(new THREE.Vector3(0, 0, -55));
-        break;
-
-      case 12:
-        StoryCampaign.mode = 'destroy';
-        titleEl.innerText = '📖 ГЛАВА 12/16: ЧАСТЬ XII — Т-МИНУС 20 МИНУТ (ЛИПКОЕ ВТОРЖЕНИЕ)';
-        descEl.innerText = 'Разрушьте 4 Золотых Гейзера био-полимера и зачистите делящихся Жировиков!';
-        showComicCutsceneBanner(
-          'НОВОЕ СОСТОЯНИЕ ВЕЩЕСТВА — *ШЛЮЮ-ЮП*', '💛', '#d4a017',
-          '<b>Димон Лимон:</b> «Это не кислота Грейпстасика! Она слишком густая... ВНИМАНИЕ: Обнаружен неустановленный жировой био-полимер!»'
-        );
-        [[-180, -80], [-220, -80], [-200, -120], [-200, -40]].forEach(([x, z]) => {
-          StoryCampaign.objectives.push(spawnStoryObjectiveConstruct(x, 0, z, 'fat_geyser'));
-          window.spawnGoldenFatBlob(x + 5, z, false);
-        });
-        break;
-
-      case 13:
-        StoryCampaign.mode = 'boss';
-        titleEl.innerText = '📖 ГЛАВА 13/16: ВОСХОЖДЕНИЕ ЖИРИГОРЯ («ЗОЛОТОЙ СТАНДАРТ»)';
-        descEl.innerText = 'Заморозьте Жиригоря на [C] («Морозильная Установка») и сбейте половину его HP!';
-        showComicCutsceneBanner(
-          'ЛАБОРАТОРИЯ ТОНЕТ В ЖИРУ!', '💛', '#e8b828',
-          '<b>Жиригорь (Jirigory):</b> «Приветствую, мои сочные! Я Жиригорь, и я пришёл за своим "Золотым Стандартом"! Истинный Жир не горит, не растворяется... он просто ПОГЛОЩАЕТ!»<br><b>Егорбанан:</b> «Шрекич! Экстренный Протокол: морозильная установка [C]!»',
-          9500
-        );
-        StoryCampaign.bossEntity = window.spawnJirigoryBoss(45, -45, false);
-        break;
-
-      case 14:
-        StoryCampaign.mode = 'collect';
-        titleEl.innerText = '📖 ГЛАВА 14/16: СИНТЕЗ КИСЛОТНОЙ КОРРОЗИИ НА КРЫШАХ';
-        descEl.innerText = 'Соберите 4 Канистры Кислотного Катализатора на крышах небоскребов!';
-        showComicCutsceneBanner(
-          'ДИМОН ЛИМОН: КИСЛЫЕ РЕПУЛЬСОРЫ!', '🍋', '#88ff00',
-          '<b>Димон Лимон:</b> «Морозилка была лишь временным решением! Собери 4 канистры концентрированного сока на высотках, чтобы мы залили Жиригоря КИСЛЫМ ДОЖДЁМ!»'
-        );
-        const roofSpots = [];
-        for (let i = 0; i < buildings.length && roofSpots.length < 4; i++) {
-          const b = buildings[i];
-          if (b.topY >= 28 && b.topY <= 75 && Math.abs(b.x) < 220 && Math.abs(b.z) < 220) {
-            roofSpots.push([b.x, b.topY, b.z]);
-          }
-        }
-        while (roofSpots.length < 4) roofSpots.push([(roofSpots.length - 1.5) * 45, 18, -50]);
-        roofSpots.forEach(([x, y, z]) => {
-          StoryCampaign.collectibles.push(spawnAcidCanister(x, y, z));
-        });
-        break;
-
-      case 15:
-        StoryCampaign.mode = 'destroy';
-        titleEl.innerText = '📖 ГЛАВА 15/16: ПРОРЫВ И ЖИРНАЯ РЕКРИСТАЛЛИЗАЦИЯ';
-        descEl.innerText = 'Разбейте 3 Арктических Пилона, которые Жиригорь использует как катализатор!';
-        showComicCutsceneBanner(
-          'ХРУСТЬ-ХРУСТЬ... ОН ОГРОМНЫЙ!', '❄️', '#00f2fe',
-          '<b>Егорбанан:</b> «Шрекич! Арктический Баланс не сдерживает его! Он использует холод как катализатор для... ЖИРНОЙ РЕКРИСТАЛЛИЗАЦИИ! Разбей ледяные пилоны!»'
-        );
-        [[-55, -85], [55, -85], [0, -135]].forEach(([x, z]) => {
-          StoryCampaign.objectives.push(spawnStoryObjectiveConstruct(x, 0, z, 'arctic_pylon'));
-          window.spawnGoldenFatBlob(x + 4, z + 4, false);
-        });
-        break;
-
-      case 16:
-        StoryCampaign.mode = 'boss';
-        titleEl.innerText = '🔥 ФИНАЛ (16/16): ТИТАН МУЛЬТИФРУКТА ПРОТИВ МЕГА-ЖИРИГОРЯ';
-        descEl.innerText = 'Протокол «Титан Мультифрукта» активен! Испарите Мега-Жиригоря Ударом Баланса!';
-        showComicCutsceneBanner(
-          'КОМБИНИРОВАННЫЙ УДАР БАЛАНСА — *ФШШШШШ!*', '🌈', '#ff0055',
-          '<b>Егорбанан и Димон Лимон:</b> «Мультифрукт-Ядро: СТАТУС АКТИВЕН! Код Родотенанц-Восстановление: *ТАНДЕМ БАЛАНСА*!»<br><b>Мега-Жиригорь:</b> «Аргх! Мой... Жир! Он... *испаряется*!»',
+          'ФИНАЛЬНАЯ СОЛО-ДУЭЛЬ: СТОЛКНОВЕНИЕ ВЕКА!', '💛', '#e8b828',
+          '<b>Абсолютный Жиригорь:</b> «Приветствую, мои сочные! Я Жиригорь, и я выхожу против тебя ОДИН НА ОДИН за своим "Золотым Стандартом"! Я поглощу вас, Титаны Баланса!»',
           10500
         );
-        activateMultifruitTitanProtocol();
-        StoryCampaign.bossEntity = window.spawnJirigoryBoss(0, -75, true);
+        StoryCampaign.bossEntity = window.spawnSoloFinalJirigory(0, 30);
         break;
 
       default:
         StoryCampaign.completed = true;
-        titleEl.innerText = '🏆 ВСЕ 16 ГЛАВ ПРОЙДЕНЫ: ТРИУМФ МУЛЬТИФРУКТА!';
-        descEl.innerText = 'Грейпстасик и Жиригорь повержены! Награда: +15 000 EP [Нажмите N для новой кампании]';
+        _soloBossLock = false;
+        titleEl.innerText = '🏆 КАМПАНИЯ ПРОЙДЕНА: ТРИУМФ МУЛЬТИФРУКТ-ТИТАНОВ!';
+        descEl.innerText = 'Грейпстасик и Жиригорь повержены в честных дуэлях! (+20 000 EP) [N — заново]';
         document.getElementById('story-ch-dist').innerText = '⭐ Жир застыл, Горечь повержена! *ЗУМ... СИНТЕЗ ПОЛНЫЙ!*';
         if (StoryCampaign.waypointBeam) StoryCampaign.waypointBeam.visible = false;
         if (StoryCampaign.waypointRing) StoryCampaign.waypointRing.visible = false;
-        if (StoryCampaign.skyVortex && StoryCampaign.skyVortex.parent) scene.remove(StoryCampaign.skyVortex);
-        if (StoryCampaign.rodotenancDrones && StoryCampaign.rodotenancDrones.parent) scene.remove(StoryCampaign.rodotenancDrones);
-        player.ep += 15000;
-        player.score += 150000;
+        player.ep += 20000;
+        player.score += 200000;
         updateHUD();
         updateScoreDisplay();
         showComicCutsceneBanner(
-          'ТРИУМФ ТАНДЕМА ПОБЕДЫ!', '🏆', '#2ecc71',
-          '<b>Егорбанан, Димон Лимон, Перец и Хохлорковь:</b> «Мы сделали это! Тандем Наноягода-Лимон-Перец-Хохлорковь работает! Это начало новой мультифруктовой эры!»',
+          'ТРИУМФ МУЛЬТИФРУКТА!', '🏆', '#2ecc71',
+          '<b>Егорбанан, Димон Лимон, Перец и Хохлорковь:</b> «Мы сделали это! Жир застыл, Горечь повержена! Это начало новой мультифруктовой эры!»',
           12000
         );
         break;
@@ -2359,76 +2312,43 @@
     }
   });
 
-  // Радужный Удар Баланса в 16-й главе
+  // Радужный Удар Баланса при активном Протоколе Титана Мультифрукта
   const _origPPATitan = window.performPrimaryAttack;
   window.performPrimaryAttack = function () {
     if (_origPPATitan) _origPPATitan.apply(this, arguments);
-    if (player._multifruitTitanActive && StoryCampaign.chapter === 16) {
+    if (player._multifruitTitanActive) {
       const fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
       const chest = player.pos.clone().add(new THREE.Vector3(0, 2.3, 0));
       spawnSlashArc(chest.clone().add(fwd.clone().multiplyScalar(3)), player.facingYaw, 0, 0x7cfc00, 8.5, 0.25);
       spawnSlashArc(chest.clone().add(fwd.clone().multiplyScalar(4)), player.facingYaw, 0.3, 0xff00ff, 9.5, 0.28);
       for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
-        if (e.group.position.distanceTo(player.pos) <= 18) {
-          damageEnemy(e, 480, fwd.clone().multiplyScalar(8), '*🌈 ТАНДЕМ БАЛАНСА!*');
+        if (e.group.position.distanceTo(player.pos) <= 16) {
+          damageEnemy(e, 380, fwd.clone().multiplyScalar(6), '*🌈 ТАНДЕМ БАЛАНСА!*');
         }
       }
     }
   };
 
-  // Главный цикл прогресса 16 глав кампании и интерактивных объектов карты
+  // Цикл обновления миссий кампании
   setInterval(() => {
-    if (!gameStarted || player.isDead) return;
-    const nowSec = performance.now() * 0.001;
-
-    // 1. Трамплины (Jump Pads)
-    for (let i = 0; i < worldJumpPads.length; i++) {
-      const jp = worldJumpPads[i];
-      if (jp.cd > 0) jp.cd -= 0.1;
-      if (jp.ring) jp.ring.rotation.z += 0.15;
-      if (jp.cd <= 0 && player.pos.distanceTo(jp.pos) < 4.0) {
-        jp.cd = 1.2;
-        player.vel.y = 58;
-        player.isGrounded = false;
-        player.airFlipTimer = 0.5;
-        SoundFX.whip();
-        spawnGroundCrackRing(jp.pos, 0x00ff66, 9);
-        spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 3, 0)), '*🚀 МЕГА-ТРАМПЛИН!*', '#00ff66');
-      }
-    }
-
-    // 2. Зеленые Био-Купола Восстановления (лечат HP и дают энергию внутри)
-    for (let i = 0; i < healingBioDomes.length; i++) {
-      const hd = healingBioDomes[i];
-      hd.mesh.rotation.y += 0.01;
-      if (player.pos.distanceTo(hd.pos) < hd.radius) {
-        player.hp = Math.min(player.maxHp, player.hp + 2.5);
-        player.en = Math.min(player.maxEn, player.en + 4.0);
-        if (CARROT_MODE) player.carrotStamina = Math.min(player.carrotStaminaMax, player.carrotStamina + 3.0);
-      }
-    }
-
-    if (StoryCampaign.completed) return;
-
+    if (!gameStarted || player.isDead || StoryCampaign.completed) return;
     const ch = StoryCampaign.chapter;
     const descEl = document.getElementById('story-ch-desc');
     const distEl = document.getElementById('story-ch-dist');
+    const nowSec = performance.now() * 0.001;
 
-    if (StoryCampaign.skyVortex) StoryCampaign.skyVortex.rotation.z += 0.08;
-    if (StoryCampaign.rodotenancDrones) {
-      StoryCampaign.rodotenancDrones.rotation.y += 0.04;
-      if (StoryCampaign.bossEntity && StoryCampaign.bossEntity.hp > 0) {
-        damageEnemy(StoryCampaign.bossEntity, 110, new THREE.Vector3(), '');
-      }
+    if (StoryCampaign.rodotenancDrones && StoryCampaign.bossEntity && StoryCampaign.bossEntity.group) {
+      StoryCampaign.rodotenancDrones.position.x = StoryCampaign.bossEntity.group.position.x;
+      StoryCampaign.rodotenancDrones.position.z = StoryCampaign.bossEntity.group.position.z;
+      StoryCampaign.rodotenancDrones.rotation.y += 0.05;
     }
 
-    // Логика по типам миссий
     if (StoryCampaign.mode === 'destroy') {
       StoryCampaign.objectives = StoryCampaign.objectives.filter((obj) => obj && obj.hp > 0 && enemies.indexOf(obj) !== -1);
       if (StoryCampaign.objectives.length === 0) {
         SoundFX.devastator();
-        player.ep += 350;
+        player.ep += 400;
         player.score += 6000;
         updateHUD();
         updateScoreDisplay();
@@ -2442,93 +2362,54 @@
         if (d < minD) { minD = d; nearest = StoryCampaign.objectives[i]; }
       }
       StoryCampaign.targetPos.copy(nearest.group.position);
-      if (descEl) descEl.innerText = `Целей для уничтожения осталось: ${StoryCampaign.objectives.length} | [N] — пропуск главы`;
-    } else if (StoryCampaign.mode === 'defend') {
-      StoryCampaign.defendTimer -= 0.1;
-      if (StoryCampaign.defendCore) {
-        StoryCampaign.defendCore.rotation.y += 0.08;
-        StoryCampaign.defendCore.rotation.x += 0.05;
-      }
-      if (enemies.length < 5) {
-        const a = Math.random() * Math.PI * 2;
-        spawnCitrusSoldier(Math.cos(a) * 28, -15 + Math.sin(a) * 28, 'mandarin');
-      }
-      if (descEl) descEl.innerText = `Обороняйте Ядро Синтеза BI! Осталось продержаться: ${Math.max(0, StoryCampaign.defendTimer).toFixed(1)} сек`;
-      if (StoryCampaign.defendTimer <= 0) {
-        SoundFX.devastator();
-        spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 4, 0)), '🛡️ ШТАБ ОТСТОЯЛИ!', '#00ff66');
-        player.ep += 400;
-        startStoryChapter(ch + 1);
-        return;
-      }
-    } else if (StoryCampaign.mode === 'hack') {
-      const remainingHacks = StoryCampaign.hackZones.filter((hz) => !hz.hacked);
-      if (remainingHacks.length === 0) {
-        SoundFX.devastator();
-        spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 4, 0)), '💻 ШРЕКИЧ ИИ ПЕРЕЗАГРУЖЕН!', '#00ff66');
-        player.ep += 450;
-        startStoryChapter(ch + 1);
-        return;
-      }
-      let nearestHz = remainingHacks[0];
-      for (let i = 0; i < remainingHacks.length; i++) {
-        const hz = remainingHacks[i];
-        if (player.pos.distanceTo(hz.pos) < 8.5) {
-          hz.progress = Math.min(100, hz.progress + 3.5);
-          hz.ring.material.color.setHex(0x00ff66);
-          if (hz.progress >= 100) {
-            hz.hacked = true;
-            scene.remove(hz.group);
-            spawnComicPop(hz.pos.clone().add(new THREE.Vector3(0, 4, 0)), '✓ ТЕРМИНАЛ ВЗЛОМАН!', '#00ff66');
-            SoundFX.hit(240, 0.2);
-          }
-        } else {
-          hz.ring.material.color.setHex(0x00f2fe);
+      if (descEl) descEl.innerText = `Целей осталось: ${StoryCampaign.objectives.length} | [N] — пропуск главы`;
+    } else if (StoryCampaign.mode === 'shrekich_servers') {
+      // Серверы Шрекича очищаются и от ударов игрока, и автоматически при нахождении в радиусе 15м по X/Z!
+      StoryCampaign.objectives = StoryCampaign.objectives.filter((obj) => obj && obj.hp > 0 && enemies.indexOf(obj) !== -1);
+      for (let i = StoryCampaign.objectives.length - 1; i >= 0; i--) {
+        const srv = StoryCampaign.objectives[i];
+        const flatDist = Math.hypot(player.pos.x - srv.group.position.x, player.pos.z - srv.group.position.z);
+        if (flatDist < 15.0) {
+          damageEnemy(srv, 90, new THREE.Vector3(), '*💻 ОЧИСТКА ВИРУСА!*');
         }
-        if (player.pos.distanceTo(hz.pos) < player.pos.distanceTo(nearestHz.pos)) nearestHz = hz;
       }
-      StoryCampaign.targetPos.copy(nearestHz.pos);
-      if (descEl) descEl.innerText = `Взлом терминалов Шрекича: осталось ${remainingHacks.length} (Прогресс текущего: ${Math.round(nearestHz.progress)}%)`;
-    } else if (StoryCampaign.mode === 'collect') {
-      const remCol = StoryCampaign.collectibles.filter((c) => !c.collected);
-      if (remCol.length === 0) {
+      StoryCampaign.objectives = StoryCampaign.objectives.filter((obj) => obj && obj.hp > 0 && enemies.indexOf(obj) !== -1);
+      if (StoryCampaign.objectives.length === 0) {
         SoundFX.devastator();
-        spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 4, 0)), '🍋 КИСЛОТНЫЙ КАТАЛИЗАТОР СОБРАН!', '#88ff00');
+        spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 4, 0)), '💻 СЕРВЕРЫ ШРЕКИЧА ОЧИЩЕНЫ!', '#00ff66');
         player.ep += 500;
         startStoryChapter(ch + 1);
         return;
       }
-      let nearestC = remCol[0];
-      for (let i = 0; i < remCol.length; i++) {
-        const c = remCol[i];
-        c.group.rotation.y += 0.1;
-        if (player.pos.distanceTo(c.pos) < 5.0) {
-          c.collected = true;
-          scene.remove(c.group);
-          spawnComicPop(c.pos.clone(), '🧪 +1 КАТАЛИЗАТОР КОРРОЗИИ!', '#88ff00');
-          SoundFX.whip();
-        }
-        if (player.pos.distanceTo(c.pos) < player.pos.distanceTo(nearestC.pos)) nearestC = c;
+      StoryCampaign.targetPos.copy(StoryCampaign.objectives[0].group.position);
+      if (descEl) descEl.innerText = `Очистите серверы Шрекича ударом или подойдите к ним (Осталось: ${StoryCampaign.objectives.length})`;
+    } else if (StoryCampaign.mode === 'defend') {
+      StoryCampaign.defendTimer -= 0.1;
+      if (StoryCampaign.defendCore) {
+        StoryCampaign.defendCore.rotation.y += 0.08;
       }
-      StoryCampaign.targetPos.copy(nearestC.pos);
-      if (descEl) descEl.innerText = `Соберите канистры Кислотного Катализатора на крышах (Осталось: ${remCol.length})`;
-    } else if (StoryCampaign.mode === 'boss') {
-      const b = StoryCampaign.bossEntity;
-      if (!b || b.hp <= 0 || enemies.indexOf(b) === -1) {
+      if (enemies.length < 4) {
+        const a = Math.random() * Math.PI * 2;
+        spawnCitrusSoldier(Math.cos(a) * 24, -15 + Math.sin(a) * 24, 'mandarin');
+      }
+      if (descEl) descEl.innerText = `Обороняйте Ядро Синтеза BI! Осталось: ${Math.max(0, StoryCampaign.defendTimer).toFixed(1)} сек`;
+      if (StoryCampaign.defendTimer <= 0) {
         SoundFX.devastator();
-        player.ep += 750;
-        player.score += 12000;
-        updateHUD();
-        updateScoreDisplay();
+        player.ep += 400;
         startStoryChapter(ch + 1);
         return;
       }
-      if (ch === 10 && b.hp / b.maxHp <= 0.60) {
-        startStoryChapter(11);
-        return;
-      }
-      if (ch === 13 && b.hp / b.maxHp <= 0.55) {
-        startStoryChapter(14);
+    } else if (StoryCampaign.mode === 'boss') {
+      const b = StoryCampaign.bossEntity;
+      if (!b || b.hp <= 0 || enemies.indexOf(b) === -1) {
+        _soloBossLock = false;
+        setBossCastBar('', 0, false);
+        SoundFX.devastator();
+        player.ep += 1500;
+        player.score += 25000;
+        updateHUD();
+        updateScoreDisplay();
+        startStoryChapter(ch + 1);
         return;
       }
       StoryCampaign.targetPos.copy(b.group.position);
@@ -2541,7 +2422,7 @@
       StoryCampaign.waypointBeam.position.z = StoryCampaign.targetPos.z;
       StoryCampaign.waypointRing.position.set(StoryCampaign.targetPos.x, 0.3, StoryCampaign.targetPos.z);
       StoryCampaign.waypointRing.scale.setScalar(1 + Math.sin(nowSec * 5) * 0.2);
-      const distMeters = Math.round(player.pos.distanceTo(StoryCampaign.targetPos));
+      const distMeters = Math.round(Math.hypot(player.pos.x - StoryCampaign.targetPos.x, player.pos.z - StoryCampaign.targetPos.z));
       if (distEl) distEl.innerText = `📍 ДО ЦЕЛИ МИССИИ: ${distMeters} М | [N] — СЛЕДУЮЩАЯ ГЛАВА`;
     }
   }, 100);
@@ -2578,7 +2459,7 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // ═══ 7. ПОЛНОЕ СОХРАНЕНИЕ ВСЕХ СИСТЕМ v53 (ДЕНЬ/НОЧЬ, ЩИТ, ШРЕКИЧ, КАРТОШКА)
+  // ═══ 6. 100% СОХРАНЕНИЕ ВСЕХ СИСТЕМ v53 (ДЕНЬ/НОЧЬ, ЩИТ, ШРЕКИЧ, КАРТОШКА)
   // ═══════════════════════════════════════════════════════════════════════════
   if (typeof TimeOfDay !== 'undefined') TimeOfDay.speed = 1 / 90;
   setTimeout(() => {
@@ -2616,7 +2497,7 @@
       dmg = Math.floor(dmg * 0.5);
     }
     if (player._multifruitTitanActive) {
-      dmg = Math.floor(dmg * 0.45);
+      dmg = Math.floor(dmg * 0.55);
     }
     if (player.activeModeF && player.suitIdx === 3 && player.character === 'banana' && !PEPPER_MODE && !CARROT_MODE && !LEMON_MODE) {
       const drain = dmg * 1.5;
@@ -3078,8 +2959,8 @@
       if (player._potatoRamCd > 0) return;
       player._potatoRamCd = 6.0;
       var fwd = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw));
-      player.vel.x += fwd.x * 180;
-      player.vel.z += fwd.z * 180;
+      player.vel.x += fwd.x * 95;
+      player.vel.z += fwd.z * 95;
       player.dodgeIframes = 0.6;
       spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 3, 0)), '💥 ТАРАН! 💥', '#8B4513');
       SoundFX.devastator();
@@ -3304,5 +3185,5 @@
     }
   }, 100);
 
-  console.log("🍌 [PATCH v90] Готово: Гарпун 750м (110 м/с), 16 глав сюжета, усиленные боссы, 6 типов врагов и живая карта активны.");
+  console.log("🍌 [PATCH v100] Готово: Плавный Гарпун 160м, Фикс Серверов Шрекича, Соло-Дуэли с Грейпстасиком и Жиригорем активны.");
 })();
