@@ -1,26 +1,26 @@
 // ============================================================================
-// BANANA INDUSTRIES — MASTER PATCHER v3
-// - Работает через window.__game (base-переменные const НЕ видны из patch-скоупа)
-// - Wall-run убит у Банана и Лимона (pre-push + post-undo + блок walljump)
-// - Пистолет на Q/ПКМ суита 0: стрельба + МОДЕЛЬ в руке
-// - LMB-атаки замедлены через внешний cooldown + удлинение анимации
-// - Плавность: hitstop ≥60мс, длительность анимации ×1.6
-// - Меньше частиц, реже надписи
-// - Все багфиксы из .txt
+// BANANA INDUSTRIES — MASTER PATCHER v4
+// Ключевые изменения от v3:
+//  • Hitstop на обычных ударах ≈0, на критах ≈24мс (БОЛЬШЕ НЕТ ФРИЗА НА КИЛЛАХ)
+//  • Скорость игрока ×0.82 (было ×0.55), врагов ×0.88 (было ×0.70)
+//  • Пистолет ×2 размер + glow-outline, железная привязка
+//  • Impact pulses: один RAF-цикл вместо N RAF'ов
+//  • Пули: один тикер
 // ============================================================================
 (function () {
   'use strict';
-  if (window.__BANANA_MASTER_PATCHER_V3) return;
-  window.__BANANA_MASTER_PATCHER_V3 = true;
-  console.log('🔧 [MASTER PATCHER v3] Инициализация...');
+  if (window.__BANANA_MASTER_PATCHER_V4) return;
+  window.__BANANA_MASTER_PATCHER_V4 = true;
+  console.log('🔧 [MASTER PATCHER v4] Инициализация...');
 
-  const V3 = {
-    SPEED_MUL:        0.55,
-    ENEMY_SPEED_MUL:  0.70,
-    BOSS_SPEED_MUL:   0.75,
-    ANIM_EXT_MUL:     1.60,
-    LMB_MIN_CD_MS:    480,
-    HITSTOP_MIN:      0.065,
+  const V4 = {
+    SPEED_MUL:        0.82,   // ⬆ было 0.55 — теперь не ползём
+    ENEMY_SPEED_MUL:  0.88,   // ⬆ было 0.70
+    BOSS_SPEED_MUL:   0.88,   // ⬆ было 0.75
+    ANIM_EXT_MUL:     1.60,   // оставляем (жалобы были только на движение)
+    LMB_MIN_CD_MS:    480,    // оставляем
+    HITSTOP_CRIT:     0.024,  // ⬇ было 0.065 — только криты получают стоп
+    HITSTOP_NORMAL:   0.002,  // обычные удары — почти 0
     PARTICLE_MUL:     0.35,
     POPUP_CD_MS:      1000,
     DMG_NUM_PS:       5,
@@ -28,20 +28,18 @@
     PISTOL_DMG:       46,
     PISTOL_RADIUS:    1.4,
     CROSSHAIR_MS:     320,
-    WALL_PUSH_PAD:    2.0
+    MAX_IMPACTS_PS:   10
   };
-  window.__V3_TUNING = V3;
+  window.__V4_TUNING = V4;
 
-  // ─── Безопасные геттеры (base const НЕ на window) ─────────────────────────
+  // ─── Безопасные геттеры ─────────────────────────────────────────────────
   const getPlayer  = () => (window.__game && window.__game.player) || window.player || null;
   const getEnemies = () => (window.__game && window.__game.enemies) || window.enemies || [];
   const getScene   = () => (window.__game && window.__game.scene) || window.scene || null;
   const getCamera  = () => window.camera || (window.__game && window.__game.camera) || null;
-
   const isPepper = () => { const p = getPlayer(); return !!p && p.character === 'pepper'; };
   const isCarrot = () => { const p = getPlayer(); return !!p && p.character === 'carrot'; };
   const isLemon  = () => { const p = getPlayer(); return !!p && p.character === 'lemon'; };
-  const isBanana = () => { const p = getPlayer(); return !!p && p.character === 'banana'; };
   const isPotato = () => !!window.__POTATO_MODE;
   const allowWallRun = () => isCarrot() || isPotato();
 
@@ -52,7 +50,7 @@
       if (done) return;
       let ok = false;
       try { ok = cond(); } catch (e) { ok = false; }
-      if (ok) { done = true; try { cb(); } catch (e) { console.error('[patcher v3]', e); } return; }
+      if (ok) { done = true; try { cb(); } catch (e) { console.error('[patcher v4]', e); } return; }
       if (performance.now() - t0 >= max) return;
       requestAnimationFrame(tick);
     };
@@ -60,219 +58,184 @@
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 1. СЛОУДАУН ИГРОКА (через getSuitData + pepperStats/carrotStats — они на window)
+  // 1. СКОРОСТЬ — ВОЗВРАЩАЕМ НОРМАЛЬНЫЙ ТЕМП
   // ═══════════════════════════════════════════════════════════════════════════
   waitFor(() => typeof window.getSuitData === 'function', () => {
     const _g = window.getSuitData;
     window.getSuitData = function () {
       const d = _g.apply(this, arguments);
-      if (d && typeof d.speed === 'number' && !d._v3Scaled) {
-        d._v3OrigSpeed = d.speed;
-        d.speed = d._v3OrigSpeed * V3.SPEED_MUL;
-        d._v3Scaled = true;
+      if (d && typeof d.speed === 'number') {
+        // Восстанавливаем оригинал, даже если v3 уже записал _v3OrigSpeed
+        const orig = d._v3OrigSpeed || d._v4OrigSpeed || d.speed;
+        d._v4OrigSpeed = orig;
+        d.speed = orig * V4.SPEED_MUL;
       }
       return d;
     };
-
-    // pepperStats/carrotStats возвращают объекты, которые идут в кэш getSuitData
     ['pepperStats', 'carrotStats'].forEach(fn => {
       if (typeof window[fn] !== 'function') return;
       const _s = window[fn];
       window[fn] = function () {
         const d = _s.apply(this, arguments);
-        if (d && typeof d.speed === 'number' && !d._v3Scaled) {
-          d._v3OrigSpeed = d.speed;
-          d.speed = d._v3OrigSpeed * V3.SPEED_MUL;
-          d._v3Scaled = true;
+        if (d && typeof d.speed === 'number') {
+          const orig = d._v3OrigSpeed || d._v4OrigSpeed || d.speed;
+          d._v4OrigSpeed = orig;
+          d.speed = orig * V4.SPEED_MUL;
         }
         return d;
       };
     });
-    console.log('✅ Слоудаун игрока ×' + V3.SPEED_MUL);
+    console.log('✅ Скорость игрока ×' + V4.SPEED_MUL);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 2. ПЛАВНЫЕ LMB-АТАКИ (внешний cooldown + удлинение attackDuration)
+  // 2. HITSTOP — ГЛАВНЫЙ ФИКС (больше не стопит кадр на киллах)
   // ═══════════════════════════════════════════════════════════════════════════
-  waitFor(() => typeof window.performPrimaryAttack === 'function' && getPlayer(), () => {
-    const _orig = window.performPrimaryAttack;
-    let _lastLMB = 0;
-
-    window.performPrimaryAttack = function () {
+  waitFor(() => typeof window.triggerHitstopAndChroma === 'function', () => {
+    const _h = window.triggerHitstopAndChroma;
+    window.triggerHitstopAndChroma = function (stop, shake, chr) {
       const P = getPlayer();
-      if (!P) return _orig.apply(this, arguments);
-
-      const now = performance.now();
-      if (now - _lastLMB < V3.LMB_MIN_CD_MS) return;
-
-      const beforeTimer = P.attackTimer;
-      const result = _orig.apply(this, arguments);
-
-      // Если base реально начал атаку (сбросил attackTimer), продлеваем анимацию
-      if (P.attackTimer > beforeTimer && P.attackTimer > 0.1) {
-        _lastLMB = now;
-        P.attackDuration *= V3.ANIM_EXT_MUL;
-        P.attackTimer *= V3.ANIM_EXT_MUL;
+      if (P) {
+        const s = stop || 0;
+        if (s < 0.015) {
+          // ОБЫЧНЫЙ УДАР / КИЛЛ — почти без стопа (2мс = доля кадра)
+          P.hitStop = Math.max(P.hitStop || 0, V4.HITSTOP_NORMAL);
+        } else if (s < 0.05) {
+          // КРИТ — короткий отзывчивый стоп (~1.5 кадра)
+          P.hitStop = Math.max(P.hitStop || 0, Math.min(V4.HITSTOP_CRIT, s * 1.3));
+        }
+        // s >= 0.05 (девастатор/способности) — база сама решит, не душим
+        P.cameraShake = Math.max(P.cameraShake || 0, 0.18);
       }
-      return result;
+      // Не форсим минимум! База сама выставит свою величину
+      if (_h) _h.call(this, stop, shake, chr);
     };
-    console.log('✅ LMB-атаки замедлены (min ' + V3.LMB_MIN_CD_MS + 'мс) + анимация ×' + V3.ANIM_EXT_MUL);
+    console.log('✅ Hitstop исправлен (криты 24мс, обычные 2мс)');
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 3. ПЛАВНЫЕ АТАКИ ВРАГОВ
+  // 3. IMPACT PULSES — ОДИН RAF-ЦИКЛ (было N RAF'ов = фризы на AOE)
   // ═══════════════════════════════════════════════════════════════════════════
-  waitFor(() => typeof window.playEnemyMeleeAttack === 'function', () => {
-    const _base = window.playEnemyMeleeAttack;
-    const M = 1.45;
+  const _impactPool = [];
+  const _activeImpacts = [];
+  let _lastImpactMs = 0;
 
-    window.playEnemyMeleeAttack = function (en, type) {
-      const _origSt = window.setTimeout;
-      window.setTimeout = function (fn, ms, ...rest) {
-        return _origSt.call(window, fn, (ms || 0) * M, ...rest);
-      };
-      try {
-        const res = _base.call(this, en, type);
-        if (en) {
-          if (typeof en._telegraphT === 'number')   en._telegraphT *= M;
-          if (typeof en._telegraphMax === 'number') en._telegraphMax *= M;
-          if (typeof en._meleeDur === 'number')     en._meleeDur *= M;
-          if (typeof en.attackCd === 'number')      en.attackCd *= M;
-        }
-        return res;
-      } finally {
-        window.setTimeout = _origSt;
-      }
-    };
-    console.log('✅ Атаки врагов плавнее ×' + M);
-  });
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 4. УБИРАЕМ КАРАБКАНИЕ (pre-push + post-undo + блок walljump)
-  // ═══════════════════════════════════════════════════════════════════════════
-  waitFor(() => typeof window.updatePlayerChoreographyAndCamera === 'function' && getPlayer(), () => {
-    const _orig = window.updatePlayerChoreographyAndCamera;
-    const B = () => (typeof buildings !== 'undefined' && buildings) || window.buildings || [];
-
-    window.updatePlayerChoreographyAndCamera = function (dt, now) {
-      const P = getPlayer();
-      if (!P) return _orig.apply(this, arguments);
-
-      // PRE: вытолкнуть из стены с запасом, чтобы base-паддинг не видел стену
-      if (!allowWallRun()) {
-        const blds = B();
-        const PRE_PAD = 2.2;
-        for (let i = 0; i < blds.length; i++) {
-          const b = blds[i];
-          if (P.pos.y > b.topY - 0.3) continue;
-          if (P.pos.x > b.minX - PRE_PAD && P.pos.x < b.maxX + PRE_PAD &&
-              P.pos.z > b.minZ - PRE_PAD && P.pos.z < b.maxZ + PRE_PAD) {
-            const dL = P.pos.x - (b.minX - PRE_PAD);
-            const dR = (b.maxX + PRE_PAD) - P.pos.x;
-            const dB = P.pos.z - (b.minZ - PRE_PAD);
-            const dF = (b.maxZ + PRE_PAD) - P.pos.z;
-            const m = Math.min(dL, dR, dB, dF);
-            if (m === dL) P.pos.x = b.minX - PRE_PAD - 0.02;
-            else if (m === dR) P.pos.x = b.maxX + PRE_PAD + 0.02;
-            else if (m === dB) P.pos.z = b.minZ - PRE_PAD - 0.02;
-            else P.pos.z = b.maxZ + PRE_PAD + 0.02;
-          }
-        }
-      }
-
-      _orig.call(this, dt, now);
-
-      // POST: base мог успеть триггернуть wall-run → откатываем Y-подъём
-      if (!allowWallRun() && P.isWallRunning) {
-        const climb = (P.vel.y || 0) * dt;
-        P.pos.y = Math.max(0, P.pos.y - climb);
-        P.vel.y = Math.min(P.vel.y, -1);
-        P.isWallRunning = false;
-        P.wallJumpCount = 0;
-
-        // Дополнительно выталкиваем из паддинга base (1.2)
-        const blds = B();
-        const POST_PAD = 1.6;
-        for (let i = 0; i < blds.length; i++) {
-          const b = blds[i];
-          if (P.pos.y > b.topY) continue;
-          if (P.pos.x > b.minX - POST_PAD && P.pos.x < b.maxX + POST_PAD &&
-              P.pos.z > b.minZ - POST_PAD && P.pos.z < b.maxZ + POST_PAD) {
-            const dL = P.pos.x - (b.minX - POST_PAD);
-            const dR = (b.maxX + POST_PAD) - P.pos.x;
-            const dB = P.pos.z - (b.minZ - POST_PAD);
-            const dF = (b.maxZ + POST_PAD) - P.pos.z;
-            const m = Math.min(dL, dR, dB, dF);
-            if (m === dL) P.pos.x = b.minX - POST_PAD - 0.03;
-            else if (m === dR) P.pos.x = b.maxX + POST_PAD + 0.03;
-            else if (m === dB) P.pos.z = b.minZ - POST_PAD - 0.03;
-            else P.pos.z = b.maxZ + POST_PAD + 0.03;
-          }
-        }
-        if (typeof window.playerGroup !== 'undefined' && window.playerGroup) {
-          window.playerGroup.position.copy(P.pos);
-        }
-      }
-    };
-
-    const _origWallJump = window.performWallJump;
-    if (typeof _origWallJump === 'function') {
-      window.performWallJump = function () {
-        if (!allowWallRun()) {
-          const P = getPlayer();
-          if (P) { P.isWallRunning = false; P.wallJumpCount = 0; }
-          return;
-        }
-        return _origWallJump.apply(this, arguments);
-      };
+  function getImpactMesh(scene) {
+    let m = _impactPool.pop();
+    if (!m) {
+      m = new THREE.Mesh(
+        new THREE.SphereGeometry(0.55, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, wireframe: true, depthWrite: false })
+      );
+      scene.add(m);
     }
-    console.log('✅ Wall-run убран у Банана и Лимона');
+    return m;
+  }
+
+  function spawnImpactPulse(pos, colorHex) {
+    const now = performance.now();
+    if (now - _lastImpactMs < 1000 / V4.MAX_IMPACTS_PS) return;
+    _lastImpactMs = now;
+    const scene = getScene();
+    if (!scene) return;
+    const m = getImpactMesh(scene);
+    m.visible = true;
+    m.material.color.setHex(colorHex);
+    m.material.opacity = 0.9;
+    m.position.copy(pos);
+    m.scale.setScalar(0.4);
+    _activeImpacts.push({ mesh: m, t0: now });
+  }
+
+  function tickImpacts() {
+    requestAnimationFrame(tickImpacts);
+    const now = performance.now();
+    for (let i = _activeImpacts.length - 1; i >= 0; i--) {
+      const imp = _activeImpacts[i];
+      const t = (now - imp.t0) / 320;
+      if (t >= 1) {
+        imp.mesh.visible = false;
+        _impactPool.push(imp.mesh);
+        _activeImpacts.splice(i, 1);
+        continue;
+      }
+      imp.mesh.scale.setScalar(0.4 + t * 4.5);
+      imp.mesh.material.opacity = 0.9 * (1 - t);
+    }
+  }
+  tickImpacts();
+
+  waitFor(() => typeof window.damageEnemy === 'function', () => {
+    const _d = window.damageEnemy;
+    window.damageEnemy = function (en, dmg, kv, pt) {
+      const bHp = en && en.hp;
+      const r = _d.call(this, en, dmg, kv, pt);
+      if (en && en.group && dmg > 0) {
+        const pos = en.group.position.clone();
+        pos.y += (en.type === 'titan' || en._isBoss || en._isPinnacleBoss) ? 7 : 2.2;
+        spawnImpactPulse(pos, (en.hp <= 0) ? 0xffffff : 0xffe066);
+        en._hitStagger = Math.max(en._hitStagger || 0, 0.28);
+      }
+      return r;
+    };
+    console.log('✅ Impact pulses (единый цикл)');
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 5. ПИСТОЛЕТ + МОДЕЛЬ (Q / ПКМ суита 0)
+  // 4. ПИСТОЛЕТ + УЛУЧШЕННАЯ МОДЕЛЬ (крупнее, glow, железная привязка)
   // ═══════════════════════════════════════════════════════════════════════════
   const myBullets = [];
   let _lastPistolAt = 0;
+  let _bulletTickerStarted = false;
 
-  // Собственная модель пистолета
-  function buildPistolMesh(THREE) {
+  function buildPistolMesh() {
     const g = new THREE.Group();
     const darkMat  = new THREE.MeshBasicMaterial({ color: 0x15151a });
-    const metalMat = new THREE.MeshBasicMaterial({ color: 0x5a5a66 });
+    const metalMat = new THREE.MeshBasicMaterial({ color: 0x6a6a76 });
     const goldMat  = new THREE.MeshBasicMaterial({ color: 0xd4a017 });
+    const glowMat  = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.55, wireframe: true });
 
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.40, 0.14), darkMat);
-    grip.position.set(0, -0.16, 0.02);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.42, 0.16), darkMat);
+    grip.position.set(0, -0.18, 0.02);
     grip.rotation.x = 0.32;
     g.add(grip);
 
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.48), metalMat);
-    frame.position.set(0, 0.06, 0.14);
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.20, 0.54), metalMat);
+    frame.position.set(0, 0.06, 0.16);
     g.add(frame);
 
-    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.34, 8), metalMat);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.42, 8), metalMat);
     barrel.rotation.x = Math.PI / 2;
-    barrel.position.set(0, 0.08, 0.48);
+    barrel.position.set(0, 0.10, 0.56);
     g.add(barrel);
 
-    const muzzle = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.014, 6, 10), goldMat);
-    muzzle.position.set(0, 0.08, 0.66);
+    const muzzle = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.02, 6, 12), goldMat);
+    muzzle.position.set(0, 0.10, 0.78);
     g.add(muzzle);
 
-    const tg = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.016, 4, 8, Math.PI), goldMat);
+    const tg = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.022, 4, 10, Math.PI), goldMat);
     tg.rotation.y = Math.PI / 2;
     tg.rotation.z = Math.PI;
-    tg.position.set(0, -0.05, 0.07);
+    tg.position.set(0, -0.06, 0.08);
     g.add(tg);
 
-    const sight = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 0.06), darkMat);
-    sight.position.set(0, 0.17, 0.05);
+    const sight = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.08), darkMat);
+    sight.position.set(0, 0.19, 0.06);
     g.add(sight);
 
-    // Ориентируем ствол вдоль -Y wrist-локали (при вытянутой руке = forward)
+    // Свечение — гарантирует видимость в любых условиях
+    const glowRing = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.03, 6, 14), glowMat);
+    glowRing.position.set(0, 0.10, 0.60);
+    g.add(glowRing);
+
+    const glowBody = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.26, 0.60), glowMat);
+    glowBody.position.set(0, 0.06, 0.16);
+    g.add(glowBody);
+
+    // УВЕЛИЧЕН В ×2 ДЛЯ ВИДИМОСТИ
+    g.scale.setScalar(2.0);
     g.rotation.x = Math.PI / 2;
-    g.position.set(0, -0.14, 0.02);
+    g.position.set(0, -0.15, 0.05);
     return g;
   }
 
@@ -281,18 +244,19 @@
     if (!P || !P.mesh || !P.mesh.userData) return;
     const ud = P.mesh.userData;
     if (!ud.armR || !ud.armR.wrist) return;
-
-    if (ud._v3PistolMesh) {
-      if (ud._v3PistolMesh.parent) ud._v3PistolMesh.parent.remove(ud._v3PistolMesh);
-      ud._v3PistolMesh = null;
-    }
-    if (P.character !== 'banana' || P.suitIdx !== 0) return;
     if (typeof THREE === 'undefined') return;
 
-    const pistol = buildPistolMesh(THREE);
+    if (ud._v4PistolMesh) {
+      if (ud._v4PistolMesh.parent) ud._v4PistolMesh.parent.remove(ud._v4PistolMesh);
+      ud._v4PistolMesh = null;
+    }
+    if (P.character !== 'banana' || P.suitIdx !== 0) return;
+
+    const pistol = buildPistolMesh();
     ud.armR.wrist.add(pistol);
-    ud._v3PistolMesh = pistol;
-    ud._v3PistolMuzzleLocal = new THREE.Vector3(0, 0.08, 0.70); // в локале пистолета
+    ud._v4PistolMesh = pistol;
+    ud._v4PistolMuzzleLocal = new THREE.Vector3(0, 0.10, 0.80);
+    console.log('🔫 Пистолет прикреплён');
   }
 
   waitFor(() => typeof window.rebuildHeroMesh === 'function', () => {
@@ -303,38 +267,36 @@
       return res;
     };
     setTimeout(attachPistol, 500);
-    // Страховка
     setInterval(() => {
       const P = getPlayer();
       if (!P || !P.mesh || !P.mesh.userData) return;
       const ud = P.mesh.userData;
       if (!ud.armR || !ud.armR.wrist) return;
       const shouldHave = P.character === 'banana' && P.suitIdx === 0;
-      if (shouldHave && !ud._v3PistolMesh) attachPistol();
-      else if (!shouldHave && ud._v3PistolMesh) attachPistol();
-    }, 800);
+      if (shouldHave && !ud._v4PistolMesh) attachPistol();
+      else if (!shouldHave && ud._v4PistolMesh) attachPistol();
+    }, 700);
   });
 
   function getPistolMuzzleWorldPos() {
     const P = getPlayer();
     if (!P || !P.mesh || !P.mesh.userData) return null;
     const ud = P.mesh.userData;
-    if (!ud._v3PistolMesh || !ud._v3PistolMuzzleLocal) return null;
-    const v = ud._v3PistolMuzzleLocal.clone();
-    ud._v3PistolMesh.localToWorld(v);
+    if (!ud._v4PistolMesh || !ud._v4PistolMuzzleLocal) return null;
+    const v = ud._v4PistolMuzzleLocal.clone();
+    ud._v4PistolMesh.localToWorld(v);
     return v;
   }
 
   function firePistolInternal() {
     const P = getPlayer();
     const scene = getScene();
-    if (!P || !scene) return;
-    if (P.isDead) return;
+    if (!P || !scene || P.isDead) return;
     if (P.character !== 'banana' || P.suitIdx !== 0) return;
     if (isPepper() || isCarrot() || isLemon() || isPotato()) return;
 
     const now = performance.now();
-    if (now - _lastPistolAt < V3.PISTOL_CD_MS) return;
+    if (now - _lastPistolAt < V4.PISTOL_CD_MS) return;
     _lastPistolAt = now;
 
     const fwd = new THREE.Vector3(-Math.sin(P.camYaw), 0, -Math.cos(P.camYaw));
@@ -365,11 +327,10 @@
       mesh: bullet,
       vel: new THREE.Vector3(fwd.x * 95, 0, fwd.z * 95),
       life: 1.3,
-      dmg: V3.PISTOL_DMG * (1 + (P.comboMult || 1) * 0.15),
-      radius: V3.PISTOL_RADIUS
+      dmg: V4.PISTOL_DMG * (1 + (P.comboMult || 1) * 0.15),
+      radius: V4.PISTOL_RADIUS
     });
 
-    // Вспышка
     const flash = new THREE.Mesh(
       new THREE.SphereGeometry(0.65, 6, 6),
       new THREE.MeshBasicMaterial({ color: 0xfff2a0, transparent: true, opacity: 0.9, wireframe: true })
@@ -384,7 +345,7 @@
       if (ft >= 0.35) { clearInterval(fa); scene.remove(flash); flash.geometry.dispose(); flash.material.dispose(); }
     }, 16);
 
-    // Гильзы (патроны) — вылетают в сторону
+    // Гильзы
     for (let c = 0; c < 3; c++) {
       const casing = new THREE.Mesh(
         new THREE.CylinderGeometry(0.05, 0.05, 0.17, 6),
@@ -418,12 +379,7 @@
     P.camPitch = Math.max(-0.45, P.camPitch - 0.015);
     P.cameraShake = Math.max(P.cameraShake || 0, 0.16);
 
-    // Звук (безопасно)
-    try {
-      if (window.SoundFX && typeof window.SoundFX.swing === 'function') {
-        window.SoundFX.swing(820 + Math.random() * 100);
-      }
-    } catch (e) {}
+    try { if (window.SoundFX) window.SoundFX.swing(820 + Math.random() * 100); } catch (e) {}
 
     const ch = document.getElementById('crosshair');
     if (ch) {
@@ -432,35 +388,26 @@
     }
   }
 
-  // Захват Q — capture
   window.addEventListener('keydown', (e) => {
-    const P = getPlayer();
-    if (!P) return;
+    const P = getPlayer(); if (!P) return;
     if (e.code !== 'KeyQ') return;
     if (P.character !== 'banana' || P.suitIdx !== 0) return;
     if (isPepper() || isCarrot() || isLemon() || isPotato()) return;
     if (P.isDead) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    e.stopPropagation();
+    e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
     firePistolInternal();
   }, true);
 
-  // Захват ПКМ — capture
   document.addEventListener('mousedown', (e) => {
-    const P = getPlayer();
-    if (!P) return;
+    const P = getPlayer(); if (!P) return;
     if (e.button !== 2) return;
     if (P.character !== 'banana' || P.suitIdx !== 0) return;
     if (isPepper() || isCarrot() || isLemon() || isPotato()) return;
     if (P.isDead) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    e.stopPropagation();
+    e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
     firePistolInternal();
   }, true);
 
-  // Резерв — если Q всё же дойдёт до performDevastator
   waitFor(() => typeof window.performDevastator === 'function', () => {
     const _d = window.performDevastator;
     window.performDevastator = function () {
@@ -474,46 +421,42 @@
     };
   });
 
-  // Обновление HUD и слота 0
+  // HUD-надписи
   setInterval(() => {
     const P = getPlayer();
     if (!P || P.character !== 'banana' || P.suitIdx !== 0) return;
     if (isPepper() || isCarrot() || isLemon() || isPotato()) return;
-
     const el = document.getElementById('ui-powers-desc');
-    if (el && !el.dataset.v3Pistol) {
+    if (el && !el.dataset.v4Pistol) {
       el.innerHTML = '<b>ЛКМ:</b> Удары | <b>Q / ПКМ:</b> 🔫 ПИСТОЛЕТ | <b>F:</b> Турель | <b>G:</b> Ракета';
-      el.dataset.v3Pistol = '1';
+      el.dataset.v4Pistol = '1';
     }
     const badge = document.querySelector('.suit-badge');
-    if (badge && !badge.dataset.v3Pistol) {
+    if (badge && !badge.dataset.v4Pistol) {
       badge.innerText = '[0] ЕГОРБАНАН · ПИСТОЛЕТ [Q]';
-      badge.dataset.v3Pistol = '1';
+      badge.dataset.v4Pistol = '1';
     }
     const slot = document.getElementById('slot-0');
     if (slot) {
       const sub = slot.querySelector('.slot-sub');
-      if (sub && sub.textContent !== '[Q] ПИСТОЛЕТ · [F] ТУРЕЛЬ') {
-        sub.textContent = '[Q] ПИСТОЛЕТ · [F] ТУРЕЛЬ';
-      }
+      if (sub && sub.textContent !== '[Q] ПИСТОЛЕТ · [F] ТУРЕЛЬ') sub.textContent = '[Q] ПИСТОЛЕТ · [F] ТУРЕЛЬ';
     }
   }, 700);
 
-  // Сброс флагов при смене суита
   waitFor(() => typeof window.equipSuit === 'function', () => {
     const _e = window.equipSuit;
     window.equipSuit = function () {
       const desc = document.getElementById('ui-powers-desc');
-      if (desc) delete desc.dataset.v3Pistol;
+      if (desc) delete desc.dataset.v4Pistol;
       const badge = document.querySelector('.suit-badge');
-      if (badge) delete badge.dataset.v3Pistol;
-      const res = _e.apply(this, arguments);
+      if (badge) delete badge.dataset.v4Pistol;
+      const r = _e.apply(this, arguments);
       setTimeout(attachPistol, 40);
-      return res;
+      return r;
     };
   });
 
-  // Обновление своих пуль (инжект в base-цикл)
+  // Обновление своих пуль — единый тикер
   function updateMyBullets(dt) {
     const enemies = getEnemies();
     const scene = getScene();
@@ -524,7 +467,6 @@
       b.mesh.position.z += b.vel.z * dt;
       b.life -= dt;
 
-      // Враги
       for (let j = enemies.length - 1; j >= 0; j--) {
         const e = enemies[j];
         if (!e || !e.group) continue;
@@ -533,9 +475,7 @@
         const dz = b.mesh.position.z - e.group.position.z;
         const r = (e.radius || 1.2) + b.radius;
         if (dx * dx + dy * dy + dz * dz <= r * r) {
-          if (typeof window.damageEnemy === 'function') {
-            window.damageEnemy(e, b.dmg, b.vel.clone().normalize(), '*БАЦ!*');
-          }
+          if (typeof window.damageEnemy === 'function') window.damageEnemy(e, b.dmg, b.vel.clone().normalize(), '*БАЦ!*');
           b.life = 0;
           break;
         }
@@ -555,147 +495,220 @@
   waitFor(() => typeof window.updateTendrilsAndProjectiles === 'function', () => {
     const _u = window.updateTendrilsAndProjectiles;
     window.updateTendrilsAndProjectiles = function (dt) {
-      updateMyBullets(dt);
+      if (myBullets.length > 0) updateMyBullets(dt);
       return _u.apply(this, arguments);
     };
+    _bulletTickerStarted = true;
   });
-  // Fallback на случай, если updateTendrilsAndProjectiles недоступен
-  let _lastBulletTick = performance.now();
-  setInterval(() => {
-    const now = performance.now();
-    const dt = Math.min(0.05, (now - _lastBulletTick) / 1000);
-    _lastBulletTick = now;
-    if (myBullets.length > 0) updateMyBullets(dt);
-  }, 16);
 
-  console.log('✅ Пистолет + модель для суита 0');
+  // Fallback — только если основной хук не установлен
+  setTimeout(() => {
+    if (_bulletTickerStarted) return;
+    let _lt = performance.now();
+    setInterval(() => {
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - _lt) / 1000);
+      _lt = now;
+      if (myBullets.length > 0) updateMyBullets(dt);
+    }, 16);
+  }, 1500);
+
+  console.log('✅ Пистолет + модель + свой тикер пуль');
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 6. ФИДБЭК УДАРОВ (min hitstop 65мс)
+  // 5. LMB-АТАКИ (замедлены — по прошлой жалобе, оставляем)
   // ═══════════════════════════════════════════════════════════════════════════
-  waitFor(() => typeof window.triggerHitstopAndChroma === 'function' && getPlayer(), () => {
-    const _h = window.triggerHitstopAndChroma;
-    window.triggerHitstopAndChroma = function (stop, shake, chr) {
+  waitFor(() => typeof window.performPrimaryAttack === 'function' && getPlayer(), () => {
+    const _orig = window.performPrimaryAttack;
+    let _lastLMB = 0;
+    window.performPrimaryAttack = function () {
       const P = getPlayer();
-      if (P) {
-        P.hitStop = Math.max(P.hitStop || 0, V3.HITSTOP_MIN);
-        P.cameraShake = Math.max(P.cameraShake || 0, 0.30);
+      if (!P) return _orig.apply(this, arguments);
+      const now = performance.now();
+      if (now - _lastLMB < V4.LMB_MIN_CD_MS) return;
+      const bt = P.attackTimer;
+      const r = _orig.apply(this, arguments);
+      if (P.attackTimer > bt && P.attackTimer > 0.1) {
+        _lastLMB = now;
+        P.attackDuration *= V4.ANIM_EXT_MUL;
+        P.attackTimer *= V4.ANIM_EXT_MUL;
       }
-      try {
-        if (typeof postUniforms !== 'undefined' && postUniforms.uChroma) {
-          postUniforms.uChroma.value = Math.max(postUniforms.uChroma.value || 0, 0.7);
-        }
-      } catch (e) {}
-      if (_h) _h.call(this, stop, shake, chr);
+      return r;
     };
-    console.log('✅ Hitstop ≥' + V3.HITSTOP_MIN + 'с');
   });
 
-  waitFor(() => typeof window.damageEnemy === 'function' && getScene(), () => {
-    const _d = window.damageEnemy;
-    const scene = getScene();
-    const impactPool = [];
-    let _pulseOffset = 0;
-
-    function spawnImpactPulse(pos, colorHex) {
-      let m = impactPool.pop();
-      if (!m) {
-        m = new THREE.Mesh(
-          new THREE.SphereGeometry(0.55, 8, 8),
-          new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, wireframe: true, depthWrite: false })
-        );
-        scene.add(m);
-      }
-      m.visible = true;
-      m.material.color.setHex(colorHex);
-      m.material.opacity = 0.9;
-      m.position.copy(pos);
-      m.scale.setScalar(0.4);
-      const t0 = performance.now();
-      const tick = () => {
-        const t = (performance.now() - t0) / 320;
-        if (t >= 1) { m.visible = false; impactPool.push(m); return; }
-        m.scale.setScalar(0.4 + t * 4.5);
-        m.material.opacity = 0.9 * (1 - t);
-        requestAnimationFrame(tick);
+  // Плавные вражеские атаки
+  waitFor(() => typeof window.playEnemyMeleeAttack === 'function', () => {
+    const _b = window.playEnemyMeleeAttack;
+    const M = 1.45;
+    window.playEnemyMeleeAttack = function (en, type) {
+      const _st = window.setTimeout;
+      window.setTimeout = function (fn, ms, ...rest) {
+        return _st.call(window, fn, (ms || 0) * M, ...rest);
       };
-      requestAnimationFrame(tick);
-    }
-
-    window.damageEnemy = function (en, dmg, knockVec, popText) {
-      const beforeHp = en && en.hp;
-      const result = _d.call(this, en, dmg, knockVec, popText);
-      if (en && en.group && dmg > 0) {
-        const pos = en.group.position.clone();
-        pos.y += (en.type === 'titan' || en._isBoss || en._isPinnacleBoss) ? 7 : 2.2;
-        spawnImpactPulse(pos, (en.hp <= 0) ? 0xffffff : 0xffe066);
-        en._hitStagger = Math.max(en._hitStagger || 0, 0.28);
-      }
-      return result;
+      try {
+        const res = _b.call(this, en, type);
+        if (en) {
+          if (typeof en._telegraphT === 'number')   en._telegraphT *= M;
+          if (typeof en._telegraphMax === 'number') en._telegraphMax *= M;
+          if (typeof en._meleeDur === 'number')     en._meleeDur *= M;
+          if (typeof en.attackCd === 'number')      en.attackCd *= M;
+        }
+        return res;
+      } finally { window.setTimeout = _st; }
     };
-    console.log('✅ Вспышки попадания + flinch');
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 7. ЧАСТИЦЫ ×0.35
+  // 6. WALL-RUN ЗАПРЕТ (Банан + Лимон)
+  // ═══════════════════════════════════════════════════════════════════════════
+  waitFor(() => typeof window.updatePlayerChoreographyAndCamera === 'function' && getPlayer(), () => {
+    const _c = window.updatePlayerChoreographyAndCamera;
+    const B = () => (typeof buildings !== 'undefined' && buildings) || window.buildings || [];
+
+    window.updatePlayerChoreographyAndCamera = function (dt, now) {
+      const P = getPlayer();
+      if (!P) return _c.apply(this, arguments);
+
+      // PRE-push
+      if (!allowWallRun()) {
+        const blds = B(), PRE = 2.2;
+        for (let i = 0; i < blds.length; i++) {
+          const b = blds[i];
+          if (P.pos.y > b.topY - 0.3) continue;
+          if (P.pos.x > b.minX - PRE && P.pos.x < b.maxX + PRE &&
+              P.pos.z > b.minZ - PRE && P.pos.z < b.maxZ + PRE) {
+            const dL = P.pos.x - (b.minX - PRE), dR = (b.maxX + PRE) - P.pos.x;
+            const dB = P.pos.z - (b.minZ - PRE), dF = (b.maxZ + PRE) - P.pos.z;
+            const m = Math.min(dL, dR, dB, dF);
+            if (m === dL) P.pos.x = b.minX - PRE - 0.02;
+            else if (m === dR) P.pos.x = b.maxX + PRE + 0.02;
+            else if (m === dB) P.pos.z = b.minZ - PRE - 0.02;
+            else P.pos.z = b.maxZ + PRE + 0.02;
+          }
+        }
+      }
+
+      const preY = P.pos.y;
+      const frozen = (window.__MP && window.__MP._myRootedUntil > now) || (P._crystalPrisonHitsNeeded > 0);
+
+      _c.call(this, dt, now);
+
+      // POST: откат wall-run
+      if (!allowWallRun() && P.isWallRunning) {
+        P.pos.y = Math.max(0, P.pos.y - ((P.vel.y || 0) * dt));
+        P.vel.y = Math.min(P.vel.y, -1);
+        P.isWallRunning = false;
+        P.wallJumpCount = 0;
+        const blds = B(), POST = 1.6;
+        for (let i = 0; i < blds.length; i++) {
+          const b = blds[i];
+          if (P.pos.y > b.topY) continue;
+          if (P.pos.x > b.minX - POST && P.pos.x < b.maxX + POST &&
+              P.pos.z > b.minZ - POST && P.pos.z < b.maxZ + POST) {
+            const dL = P.pos.x - (b.minX - POST), dR = (b.maxX + POST) - P.pos.x;
+            const dB = P.pos.z - (b.minZ - POST), dF = (b.maxZ + POST) - P.pos.z;
+            const m = Math.min(dL, dR, dB, dF);
+            if (m === dL) P.pos.x = b.minX - POST - 0.03;
+            else if (m === dR) P.pos.x = b.maxX + POST + 0.03;
+            else if (m === dB) P.pos.z = b.minZ - POST - 0.03;
+            else P.pos.z = b.maxZ + POST + 0.03;
+          }
+        }
+        if (typeof window.playerGroup !== 'undefined' && window.playerGroup) window.playerGroup.position.copy(P.pos);
+      }
+
+      // Fix #8: кристалл Y
+      if (frozen) { P.pos.y = preY; P.vel.y = 0; }
+
+      // Fix #7: камера в стенах
+      const cam = getCamera();
+      if (cam) {
+        const blds = B();
+        for (let i = 0; i < blds.length; i++) {
+          const b = blds[i];
+          if (cam.position.x > b.minX && cam.position.x < b.maxX &&
+              cam.position.z > b.minZ && cam.position.z < b.maxZ &&
+              cam.position.y < b.topY) {
+            const dir = P.pos.clone().sub(cam.position).normalize();
+            cam.position.addScaledVector(dir, 1.6);
+          }
+        }
+      }
+    };
+
+    const _wj = window.performWallJump;
+    if (typeof _wj === 'function') {
+      window.performWallJump = function () {
+        if (!allowWallRun()) {
+          const P = getPlayer();
+          if (P) { P.isWallRunning = false; P.wallJumpCount = 0; }
+          return;
+        }
+        return _wj.apply(this, arguments);
+      };
+    }
+    console.log('✅ Wall-run убран у Банана/Лимона');
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 7. ЧАСТИЦЫ ×0.35 + НАДПИСИ РЕЖЕ
   // ═══════════════════════════════════════════════════════════════════════════
   waitFor(() => typeof window.spawnParticles === 'function', () => {
     const _p = window.spawnParticles;
     window.spawnParticles = function (pos, color, count) {
-      return _p.call(this, pos, color, Math.max(1, Math.floor((count || 10) * V3.PARTICLE_MUL)));
+      return _p.call(this, pos, color, Math.max(1, Math.floor((count || 10) * V4.PARTICLE_MUL)));
     };
     if (typeof window.spawnSparks === 'function') {
       const _s = window.spawnSparks;
       window.spawnSparks = function (pos, count, color) {
-        return _s.call(this, pos, Math.max(1, Math.floor((count || 6) * V3.PARTICLE_MUL)), color);
+        return _s.call(this, pos, Math.max(1, Math.floor((count || 6) * V4.PARTICLE_MUL)), color);
       };
     }
   });
-  console.log('✅ Частиц ×' + V3.PARTICLE_MUL);
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 8. РЕЖЕ НАДПИСИ
-  // ═══════════════════════════════════════════════════════════════════════════
   waitFor(() => typeof window.spawnComicPop === 'function', () => {
-    const _orig = window.spawnComicPop;
+    const _o = window.spawnComicPop;
     let _last = 0;
     const KEY = /RAGE|BOSS|ФАЗА|ЭВОЛЮЦИЯ|LEVEL|УРОВЕНЬ|СИНТЕЗ|МУЛЬТИФРУКТ|ПОБЕД|ФИНАЛ|ГЛАВА|СОЛО|ВРАТА|КРИСТАЛЛ|ТЮРЬМА|СЕГМЕНТ|СПИРАЛЬ|СИНГУЛЯР|ГРОМОВ|ЗОЛОТ|АЛМАЗ|МОНОЛИТ|ГАРПУН|РЫВОК К БОССУ|ЩИТ|ПАНЦИРЬ|БУР|ТАРАН/i;
     window.spawnComicPop = function (pos, text, color) {
       const now = performance.now();
-      if (KEY.test(text) || now - _last > V3.POPUP_CD_MS) {
+      if (KEY.test(text) || now - _last > V4.POPUP_CD_MS) {
         _last = now;
-        return _orig.call(this, pos, text, color);
+        return _o.call(this, pos, text, color);
       }
     };
-
     if (typeof window.spawnDamageNumber === 'function') {
       const _d = window.spawnDamageNumber;
       let cnt = 0, reset = 0;
       window.spawnDamageNumber = function (pos, v, type) {
         const now = performance.now();
         if (now - reset > 1000) { cnt = 0; reset = now; }
-        if (cnt < V3.DMG_NUM_PS || type === 'crit' || type === 'heal') {
+        if (cnt < V4.DMG_NUM_PS || type === 'crit' || type === 'heal') {
           cnt++;
           return _d.call(this, pos, v, type);
         }
       };
     }
   });
-  console.log('✅ Надписи реже');
+  console.log('✅ Частицы ×' + V4.PARTICLE_MUL + ' · надписи реже');
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 9. МЕНЬШЕ ВРАГОВ, НО СИЛЬНЕЕ
+  // 8. ВРАГИ — МЕНЬШЕ, НО СИЛЬНЕЕ (скорость 0.88)
   // ═══════════════════════════════════════════════════════════════════════════
   waitFor(() => typeof window.spawnCitrusSoldier === 'function', () => {
     const cap = () => getEnemies().filter(e => !e._isStoryConstruct && !e._isBoss && !e._isPinnacleBoss && !e._isPhasePylon).length >= 6;
 
-    const buffNew = (beforeIdx, hpMul, spdMul, sizeMul) => {
+    const buffNew = (fromIdx, hpMul, spdMul, sizeMul) => {
       const es = getEnemies();
-      for (let i = beforeIdx; i < es.length; i++) {
+      for (let i = fromIdx; i < es.length; i++) {
         const e = es[i];
         if (!e || e._isBoss || e._isStoryConstruct || e._isPinnacleBoss) continue;
-        e.hp *= hpMul; e.maxHp *= hpMul;
-        e.speed = (e.speed || 12) * spdMul;
+        // Реставрируем базу, если v3 уже записал
+        const baseHp = e._v4BaseHp || (e._v4BaseHp = e.maxHp);
+        const baseSpd = e._v4BaseSpd || (e._v4BaseSpd = e.speed || 12);
+        e.hp = baseHp * hpMul; e.maxHp = baseHp * hpMul;
+        e.speed = baseSpd * spdMul;
         if (e.group) e.group.scale.multiplyScalar(sizeMul || 1.15);
         if (e.radius) e.radius *= (sizeMul || 1.15);
         e._baseSY = (e._baseSY || 1) * (sizeMul || 1.15);
@@ -707,20 +720,20 @@
       if (Math.random() < 0.55 || cap()) return;
       const before = getEnemies().length;
       _s.apply(this, arguments);
-      buffNew(before, 2.6, V3.ENEMY_SPEED_MUL, 1.15);
+      buffNew(before, 2.6, V4.ENEMY_SPEED_MUL, 1.15);
     };
 
     const _a = window.spawnCitrusAPC;
     if (_a) window.spawnCitrusAPC = function () {
       const before = getEnemies().length;
       _a.apply(this, arguments);
-      buffNew(before, 2.0, V3.ENEMY_SPEED_MUL, 1.10);
+      buffNew(before, 2.0, V4.ENEMY_SPEED_MUL, 1.10);
     };
     const _h = window.spawnCitrusHeli;
     if (_h) window.spawnCitrusHeli = function () {
       const before = getEnemies().length;
       _h.apply(this, arguments);
-      buffNew(before, 2.0, V3.ENEMY_SPEED_MUL, 1.10);
+      buffNew(before, 2.0, V4.ENEMY_SPEED_MUL, 1.10);
     };
 
     ['spawnSoloFinalGrapestasik', 'spawnSoloFinalJirigory', 'spawnSoloBeetrootTitanGoretzka', 'spawnSoloMonolithOfSterility'].forEach(fn => {
@@ -730,61 +743,50 @@
         const r = _o.apply(this, arguments);
         const es = getEnemies();
         const b = es[es.length - 1];
-        if (b && b._isPinnacleBoss && b.speed) b.speed *= V3.BOSS_SPEED_MUL;
+        if (b && b._isPinnacleBoss && b.speed) b.speed *= V4.BOSS_SPEED_MUL;
         return r;
       };
     });
-    console.log('✅ Враги: реже, сильнее, медленнее');
+    console.log('✅ Враги: скорость ×' + V4.ENEMY_SPEED_MUL);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 10. ПРОДЖЕКТАЙЛЫ ЛИМОНА (крупнее, с glow)
+  // 9. ПРОДЖЕКТАЙЛЫ ЛИМОНА
   // ═══════════════════════════════════════════════════════════════════════════
   waitFor(() => typeof window.lemonPlasmaShot === 'function' && getPlayer() && getScene(), () => {
     window.lemonPlasmaShot = function () {
-      const P = getPlayer();
-      const scene = getScene();
-      if (!P || !scene) return;
-      if (P.lemonShotCd > 0) return;
+      const P = getPlayer(); const scene = getScene();
+      if (!P || !scene || P.lemonShotCd > 0) return;
       P.lemonShotCd = 0.22;
       try { if (window.SoundFX) window.SoundFX.swing(640); } catch (e) {}
-
       const fwd = new THREE.Vector3(-Math.sin(P.camYaw), 0, -Math.cos(P.camYaw));
       const start = P.pos.clone().add(new THREE.Vector3(0, 2.2, 0));
-
       const proj = new THREE.Mesh(
         new THREE.SphereGeometry(0.42, 10, 10),
         new THREE.MeshBasicMaterial({ color: 0x44ffaa })
       );
       proj.position.copy(start);
-      const glow = new THREE.Mesh(
+      proj.add(new THREE.Mesh(
         new THREE.SphereGeometry(0.85, 8, 8),
         new THREE.MeshBasicMaterial({ color: 0x00ff66, transparent: true, opacity: 0.5, wireframe: true })
-      );
-      proj.add(glow);
+      ));
       const tracer = new THREE.Mesh(
         new THREE.CylinderGeometry(0.14, 0.02, 3.0, 5),
         new THREE.MeshBasicMaterial({ color: 0x44ffaa, transparent: true, opacity: 0.65 })
       );
-      tracer.rotation.x = Math.PI / 2;
-      tracer.position.z = 1.5;
+      tracer.rotation.x = Math.PI / 2; tracer.position.z = 1.5;
       proj.add(tracer);
       scene.add(proj);
-
       myBullets.push({
         mesh: proj,
         vel: new THREE.Vector3(fwd.x * 105, 0, fwd.z * 105),
-        life: 1.5,
-        dmg: 44,
-        radius: 2.0
+        life: 1.5, dmg: 44, radius: 2.0
       });
-      if (typeof window.spawnParticles === 'function') window.spawnParticles(start, 0x44ffaa, 5);
     };
   });
-  console.log('✅ Проджектайлы Лимона');
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 11. БАГФИКСЫ ИЗ .txt
+  // 10. БАГФИКСЫ ИЗ .txt (все сохранены)
   // ═══════════════════════════════════════════════════════════════════════════
 
   // FIX #1, #9 — арморы + двойной щит
@@ -793,10 +795,9 @@
     window.applyDamageToHero = function (dmg) {
       const P = getPlayer();
       if (!P || P.isDead) return;
-      const shieldOn = P.activeModeF && P.suitIdx === 3 && P.character === 'banana' &&
-                       !isPepper() && !isCarrot() && !isLemon() && !isPotato();
+      const shield = P.activeModeF && P.suitIdx === 3 && P.character === 'banana' &&
+                     !isPepper() && !isCarrot() && !isLemon() && !isPotato();
       const bEn = P.en, bHp = P.hp;
-
       let eff = dmg, red = false;
       try {
         if (isCarrot() && P.mesh && P.mesh.userData && P.mesh.userData.isGiant &&
@@ -806,9 +807,7 @@
       } catch (e) {}
       if (isPotato() && window.__POTATO_FORM === 1 && P._potatoArmor > 0) { eff = Math.floor(eff * 0.5); red = true; }
       if (P._multifruitTitanActive) { eff = Math.floor(eff * 0.55); red = true; }
-
       _p.call(this, dmg);
-
       if (red) {
         const actual = bHp - P.hp;
         if (actual > eff + 0.5 && actual < dmg + 0.5) {
@@ -816,7 +815,7 @@
           if (typeof window.updateHUD === 'function') window.updateHUD();
         }
       }
-      if (shieldOn) {
+      if (shield) {
         const drained = bEn - P.en;
         if (drained > 0.01 && bHp === P.hp) {
           P.en = Math.max(0, P.en - drained);
@@ -828,84 +827,58 @@
         }
       }
     };
-    console.log('✅ Fix #1, #9: Арморы + щит');
   });
 
-  // FIX #2 — сохранение прогресса саги
+  // FIX #2 — сохранение саги
   let _lastSaved = -1;
   setInterval(() => {
     if (window.StoryCampaign && window.StoryCampaign.chapter !== _lastSaved) {
       _lastSaved = window.StoryCampaign.chapter;
-      try {
-        localStorage.setItem('banana_v201_story_progress', JSON.stringify({
-          chapter: window.StoryCampaign.chapter, ts: Date.now()
-        }));
-      } catch (e) {}
+      try { localStorage.setItem('banana_v201_story_progress', JSON.stringify({ chapter: window.StoryCampaign.chapter, ts: Date.now() })); } catch (e) {}
     }
   }, 600);
-  console.log('✅ Fix #2: Сохранение саги');
 
-  // FIX #3, #4, #11 — Старт/Continue/Сага + картошка double-init
+  // FIX #3, #4, #11
   waitFor(() => document.getElementById('start-btn') && typeof window.startGameSession === 'function', () => {
-    const clearStory = () => {
-      const es = getEnemies();
-      const scene = getScene();
+    const clear = () => {
+      const es = getEnemies(), sc = getScene();
       for (let i = es.length - 1; i >= 0; i--) {
         if (es[i]._isStoryConstruct || es[i]._isPinnacleBoss) {
-          if (scene && es[i].group && es[i].group.parent) scene.remove(es[i].group);
+          if (sc && es[i].group && es[i].group.parent) sc.remove(es[i].group);
           es.splice(i, 1);
         }
       }
       if (typeof activeBoss !== 'undefined') activeBoss = null;
     };
-
-    const startBtn = document.getElementById('start-btn');
-    if (startBtn) startBtn.addEventListener('click', () => {
+    document.getElementById('start-btn').addEventListener('click', () => {
       try { localStorage.removeItem('banana_v201_story_progress'); } catch (e) {}
       window.__pendingLoad = null;
-      clearStory();
-      if (window.StoryCampaign) {
-        window.StoryCampaign.chapter = 0;
-        window.StoryCampaign.objectives = [];
-        window.StoryCampaign.completed = false;
-      }
+      clear();
+      if (window.StoryCampaign) { window.StoryCampaign.chapter = 0; window.StoryCampaign.objectives = []; window.StoryCampaign.completed = false; }
     }, true);
-
-    const contBtn = document.getElementById('continue-btn');
-    if (contBtn) contBtn.addEventListener('click', () => {
-      try {
-        const raw = localStorage.getItem('banana_v960ng_save');
-        window.__pendingLoad = raw ? JSON.parse(raw) : null;
-      } catch (e) { window.__pendingLoad = null; }
+    const cont = document.getElementById('continue-btn');
+    if (cont) cont.addEventListener('click', () => {
+      try { const r = localStorage.getItem('banana_v960ng_save'); window.__pendingLoad = r ? JSON.parse(r) : null; } catch (e) { window.__pendingLoad = null; }
     }, true);
-
-    let _gsAt = 0;
+    let _at = 0;
     const _s = window.startGameSession;
     window.startGameSession = function (loaded) {
       const now = performance.now();
-      if (now - _gsAt < 800) return;
-      _gsAt = now;
-
+      if (now - _at < 800) return;
+      _at = now;
       const fresh = (loaded === null || loaded === undefined);
       if (fresh) {
         try { localStorage.removeItem('banana_v201_story_progress'); } catch (e) {}
-        if (window.StoryCampaign) {
-          window.StoryCampaign.chapter = 0;
-          window.StoryCampaign.objectives = [];
-          window.StoryCampaign.completed = false;
-        }
-        clearStory();
+        if (window.StoryCampaign) { window.StoryCampaign.chapter = 0; window.StoryCampaign.objectives = []; window.StoryCampaign.completed = false; }
+        clear();
       }
       const r = _s.apply(this, arguments);
-      if (fresh && window.startStoryChapter) {
-        setTimeout(() => window.startStoryChapter(1), 150);
-      }
+      if (fresh && window.startStoryChapter) setTimeout(() => window.startStoryChapter(1), 150);
       return r;
     };
-    console.log('✅ Fix #3, #4, #11');
   });
 
-  // FIX #5 — equipPotato идемпотентен
+  // FIX #5
   waitFor(() => typeof window.equipPotato === 'function', () => {
     const _e = window.equipPotato;
     window.equipPotato = function () {
@@ -915,7 +888,7 @@
     };
   });
 
-  // FIX #6, #14, #19 — врата не хилят, кап, Жиригорь
+  // FIX #6, #14, #19
   waitFor(() => typeof window.damageEnemy === 'function', () => {
     const _d = window.damageEnemy;
     window.damageEnemy = function (en, dmg, kv, pt) {
@@ -941,50 +914,13 @@
       }
       return r;
     };
-    console.log('✅ Fix #6, #14, #19');
   });
 
-  // FIX #7, #8 — камера в стенах + кристалл Y (уже покрыто в wall-run wrapper — добавим камеру отдельно)
-  waitFor(() => typeof window.updatePlayerChoreographyAndCamera === 'function' && getCamera() && getPlayer(), () => {
-    const _c = window.updatePlayerChoreographyAndCamera;
-    const B = () => (typeof buildings !== 'undefined' && buildings) || window.buildings || [];
-
-    window.updatePlayerChoreographyAndCamera = function (dt, now) {
-      const P = getPlayer();
-      if (!P) return _c.apply(this, arguments);
-      const preY = P.pos.y;
-      const frozen = (window.__MP && window.__MP._myRootedUntil > now) || (P._crystalPrisonHitsNeeded > 0);
-
-      _c.call(this, dt, now);
-
-      if (frozen) {
-        P.pos.y = preY;
-        P.vel.y = 0;
-      }
-
-      const cam = getCamera();
-      if (cam) {
-        const blds = B();
-        for (let i = 0; i < blds.length; i++) {
-          const b = blds[i];
-          if (cam.position.x > b.minX && cam.position.x < b.maxX &&
-              cam.position.z > b.minZ && cam.position.z < b.maxZ &&
-              cam.position.y < b.topY) {
-            const dir = P.pos.clone().sub(cam.position).normalize();
-            cam.position.addScaledVector(dir, 1.6);
-          }
-        }
-      }
-    };
-    console.log('✅ Fix #7, #8: Камера + кристалл Y');
-  });
-
-  // FIX #17 — carrotRootBind не бесплатен
+  // FIX #17
   waitFor(() => typeof window.carrotRootBind === 'function' && getPlayer(), () => {
     const _r = window.carrotRootBind;
     window.carrotRootBind = function () {
-      const P = getPlayer();
-      if (!P) return;
+      const P = getPlayer(); if (!P) return;
       if (!isCarrot() || P.isDead) return;
       if (P.carrotStamina < 35) {
         if (typeof window.spawnComicPop === 'function')
@@ -996,7 +932,7 @@
     };
   });
 
-  // FIX #21 — первая атака при pointerlock
+  // FIX #21
   waitFor(() => document.getElementById('game-canvas') && typeof window.performPrimaryAttack === 'function', () => {
     let _suppress = false;
     document.addEventListener('mousedown', (e) => {
@@ -1012,13 +948,12 @@
     };
   });
 
-  // FIX #24 — Combo HUD
+  // FIX #24
   waitFor(() => typeof window.pushComboMultiplier === 'function' && getPlayer(), () => {
     const _p = window.pushComboMultiplier;
     window.pushComboMultiplier = function () {
       const r = _p.apply(this, arguments);
-      const P = getPlayer();
-      const el = document.getElementById('ui-combo');
+      const P = getPlayer(), el = document.getElementById('ui-combo');
       if (el && P && P.comboMult > 1.05) {
         el.style.display = 'block';
         el.textContent = P.comboMult.toFixed(1) + 'x COMBO!';
@@ -1026,55 +961,42 @@
       return r;
     };
     setInterval(() => {
-      const P = getPlayer();
-      const el = document.getElementById('ui-combo');
+      const P = getPlayer(), el = document.getElementById('ui-combo');
       if (el && P && P.comboMult <= 1.05) el.style.display = 'none';
     }, 400);
   });
 
-  // FIX #26 — exec-prompt по врагу
+  // FIX #26
   setInterval(() => {
-    const P = getPlayer();
-    if (!P || !P.execTarget || !P.execTarget.group) return;
-    const pr = document.getElementById('exec-prompt');
-    if (!pr || pr.style.display === 'none') return;
-    const cam = getCamera();
-    if (!cam) return;
-    const pos = P.execTarget.group.position.clone();
-    pos.y += 3;
-    pos.project(cam);
+    const P = getPlayer(); if (!P || !P.execTarget || !P.execTarget.group) return;
+    const pr = document.getElementById('exec-prompt'); if (!pr || pr.style.display === 'none') return;
+    const cam = getCamera(); if (!cam) return;
+    const pos = P.execTarget.group.position.clone(); pos.y += 3; pos.project(cam);
     if (pos.z > 1 || pos.z < -1) { pr.style.display = 'none'; return; }
     pr.style.left = ((pos.x * 0.5 + 0.5) * window.innerWidth) + 'px';
     pr.style.top = ((-pos.y * 0.5 + 0.5) * window.innerHeight) + 'px';
   }, 100);
 
-  // FIX #22, #23 — z-index
+  // FIX #22, #23
   const st = document.createElement('style');
-  st.textContent = `
-    #hud { z-index: 50 !important; }
-    #boss-hud { z-index: 26 !important; }
-    #exec-prompt { z-index: 45 !important; }
-  `;
+  st.textContent = `#hud{z-index:50!important}#boss-hud{z-index:26!important}#exec-prompt{z-index:45!important}`;
   document.head.appendChild(st);
-  console.log('✅ Fix #22, #23: Z-index');
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 12. ОПТИМИЗАЦИЯ
+  // 11. ОПТИМИЗАЦИЯ
   // ═══════════════════════════════════════════════════════════════════════════
-  // Crosshair raycast — троттлинг через перехват
   waitFor(() => typeof window.raycastAllBuildingsAABB === 'function', () => {
-    const _orig = window.raycastAllBuildingsAABB;
+    const _o = window.raycastAllBuildingsAABB;
     let lastAt = 0, lastRes = null;
-    window.raycastAllBuildingsAABB = function (o, d, maxD) {
+    window.raycastAllBuildingsAABB = function (o, d, m) {
       const now = performance.now();
-      if (now - lastAt < V3.CROSSHAIR_MS) return lastRes;
+      if (now - lastAt < V4.CROSSHAIR_MS) return lastRes;
       lastAt = now;
-      lastRes = _orig.call(this, o, d, maxD);
+      lastRes = _o.call(this, o, d, m);
       return lastRes;
     };
   });
 
-  // Уборка пула частиц
   setInterval(() => {
     try {
       if (typeof ParticlePool !== 'undefined' && ParticlePool.pool && ParticlePool.pool.length > 60) {
@@ -1088,9 +1010,9 @@
   }, 30000);
 
   setTimeout(() => {
-    console.log('✅ [MASTER PATCHER v3] Все изменения применены');
+    console.log('✅ [MASTER PATCHER v4] Всё применено');
     if (typeof window.showPatchToast === 'function') {
-      window.showPatchToast('🔧 MASTER PATCHER v3', 'Пистолет+модель · без wall-run · плавнее · медленнее', '#00f2fe');
+      window.showPatchToast('🔧 MASTER PATCHER v4', 'Hitstop fixed · speed ×0.82 · pistol ×2', '#00f2fe');
     }
   }, 3200);
 
