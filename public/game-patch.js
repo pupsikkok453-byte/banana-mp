@@ -1327,10 +1327,32 @@
   };
 
   let _newVineCd = 0;
-  const VINE_CD = 0.60;
-  const HARPOON_MAX_RANGE = 240;
-  const HARPOON_PULL_SPEED = 48;
+  const VINE_CD = 0.45;
+  const HARPOON_MAX_RANGE = 420;
+  const HARPOON_PULL_SPEED = 145;
   player._activeGrapple = null;
+
+  function raycastAllBuildingsAABB(rayOrigin, rayDir, maxDist) {
+    let bestDist = maxDist, bestPoint = null, bestBuilding = null;
+    const invX = Math.abs(rayDir.x) > 1e-6 ? 1 / rayDir.x : 1e9;
+    const invY = Math.abs(rayDir.y) > 1e-6 ? 1 / rayDir.y : 1e9;
+    const invZ = Math.abs(rayDir.z) > 1e-6 ? 1 / rayDir.z : 1e9;
+    for (let i = 0; i < buildings.length; i++) {
+      const b = buildings[i];
+      const t1 = (b.minX - rayOrigin.x) * invX, t2 = (b.maxX - rayOrigin.x) * invX;
+      const t3 = (0 - rayOrigin.y) * invY, t4 = (b.topY - rayOrigin.y) * invY;
+      const t5 = (b.minZ - rayOrigin.z) * invZ, t6 = (b.maxZ - rayOrigin.z) * invZ;
+      const tmin = Math.max(Math.min(t1, t2), Math.min(t3, t4), Math.min(t5, t6));
+      const tmax = Math.min(Math.max(t1, t2), Math.max(t3, t4), Math.max(t5, t6));
+      if (tmax >= 0 && tmin <= tmax && tmin >= 4.0 && tmin < bestDist) {
+        bestDist = tmin;
+        bestPoint = rayOrigin.clone().addScaledVector(rayDir, tmin);
+        bestBuilding = b;
+      }
+    }
+    return bestPoint ? { point: bestPoint, distance: bestDist, building: bestBuilding } : null;
+  }
+  window.raycastAllBuildingsAABB = raycastAllBuildingsAABB;
 
   window.carrotGiantDrillDash = function () {
     if (!CARROT_MODE || CARROT_FORM !== 2 || player.isDead) return;
@@ -1382,54 +1404,54 @@
     const origin = player.pos.clone().add(new THREE.Vector3(0, 2.2, 0));
     const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); camDir.normalize();
     const fwdFlat = new THREE.Vector3(-Math.sin(player.camYaw), 0, -Math.cos(player.camYaw)).normalize();
-    const aimDir = new THREE.Vector3(fwdFlat.x, THREE.MathUtils.clamp(camDir.y + 0.08, -0.35, 0.65), fwdFlat.z).normalize();
-    const rc = new THREE.Raycaster();
-    const rayStart = origin.clone().addScaledVector(fwdFlat, 1.8);
-    rc.set(rayStart, aimDir); rc.far = HARPOON_MAX_RANGE;
-    const rawHits = rc.intersectObjects(buildingMeshes, false);
+
+    const rc = new THREE.Raycaster(camera.position.clone(), camDir, 1.5, HARPOON_MAX_RANGE);
+    const meshHits = rc.intersectObjects(buildingMeshes, true);
     let validBuildHit = null;
-    for (let i = 0; i < rawHits.length; i++) {
-      const h = rawHits[i];
+    for (let i = 0; i < meshHits.length; i++) {
+      const h = meshHits[i];
       if (h.point.y <= 0.8) continue;
-      const toPt = h.point.clone().sub(player.pos);
-      const flatToPt = new THREE.Vector3(toPt.x, 0, toPt.z);
-      const flatDist = flatToPt.length();
-      if (flatDist < 5.0 || flatDist > HARPOON_MAX_RANGE) continue;
-      if (flatToPt.normalize().dot(fwdFlat) < 0.75) continue;
-      const safePoint = h.point.clone().addScaledVector(fwdFlat, -2.2);
-      safePoint.y = Math.max(2.5, h.point.y);
-      validBuildHit = { point: safePoint, distance: h.distance };
+      const distFromPlayer = h.point.distanceTo(origin);
+      if (distFromPlayer < 4.5 || distFromPlayer > HARPOON_MAX_RANGE) continue;
+      validBuildHit = { point: h.point.clone(), distance: distFromPlayer, topY: h.point.y };
       break;
     }
-    if (!validBuildHit) {
-      const fallbackDir = new THREE.Vector3(fwdFlat.x, 0.12, fwdFlat.z).normalize();
-      rc.set(rayStart, fallbackDir); rc.far = HARPOON_MAX_RANGE;
-      const fbHits = rc.intersectObjects(buildingMeshes, false);
-      for (let i = 0; i < fbHits.length; i++) {
-        const h = fbHits[i];
-        if (h.point.y <= 0.8) continue;
-        const toPt = h.point.clone().sub(player.pos);
-        const flatToPt = new THREE.Vector3(toPt.x, 0, toPt.z);
-        const flatDist = flatToPt.length();
-        if (flatDist < 5.0 || flatDist > HARPOON_MAX_RANGE) continue;
-        if (flatToPt.normalize().dot(fwdFlat) < 0.75) continue;
-        const safePoint = h.point.clone().addScaledVector(fwdFlat, -2.2);
-        safePoint.y = Math.max(2.5, h.point.y);
-        validBuildHit = { point: safePoint, distance: h.distance };
-        break;
+
+    const aabbHit = raycastAllBuildingsAABB(camera.position, camDir, HARPOON_MAX_RANGE);
+    if (aabbHit) {
+      const distFromPlayer = aabbHit.point.distanceTo(origin);
+      if (!validBuildHit || distFromPlayer < validBuildHit.distance + 2.0) {
+        validBuildHit = { point: aabbHit.point, distance: distFromPlayer, topY: aabbHit.building ? aabbHit.building.topY : aabbHit.point.y };
       }
     }
-    let bestEnemy = null, bestEnemyDist = 180;
+
+    if (!validBuildHit) {
+      const assistAngles = [[0, 0.08], [0, -0.06], [0.06, 0], [-0.06, 0], [0, 0.16]];
+      for (let a = 0; a < assistAngles.length; a++) {
+        const [yawOff, pitchOff] = assistAngles[a];
+        const testDir = camDir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yawOff);
+        testDir.y = THREE.MathUtils.clamp(testDir.y + pitchOff, -0.6, 0.95);
+        testDir.normalize();
+        const hit = raycastAllBuildingsAABB(camera.position, testDir, HARPOON_MAX_RANGE);
+        if (hit && hit.point.y > 1.2) {
+          validBuildHit = { point: hit.point, distance: hit.point.distanceTo(origin), topY: hit.building ? hit.building.topY : hit.point.y };
+          break;
+        }
+      }
+    }
+
+    let bestEnemy = null, bestEnemyDist = 220;
     for (let i = 0; i < enemies.length; i++) {
       const en = enemies[i];
       if (!en || !en.group) continue;
-      const toE = en.group.position.clone().sub(player.pos);
-      const flatDist = Math.hypot(toE.x, toE.z);
-      if (flatDist < 3.0 || flatDist > 180) continue;
-      const dot = new THREE.Vector3(toE.x, 0, toE.z).normalize().dot(fwdFlat);
-      if (dot < 0.78) continue;
-      if (flatDist < bestEnemyDist) { bestEnemyDist = flatDist; bestEnemy = en; }
+      const enCenter = en.group.position.clone().add(new THREE.Vector3(0, 2.0, 0));
+      const toE = enCenter.clone().sub(camera.position);
+      const d = enCenter.distanceTo(origin);
+      if (d < 3.0 || d > 220) continue;
+      if (toE.normalize().dot(camDir) < 0.84) continue;
+      if (d < bestEnemyDist) { bestEnemyDist = d; bestEnemy = en; }
     }
+
     const buildingDist = validBuildHit ? validBuildHit.distance : Infinity;
     if (bestEnemy && bestEnemyDist <= buildingDist + 4) {
       _newVineCd = VINE_CD;
@@ -1438,58 +1460,65 @@
       const tp = bestEnemy.group.position.clone().add(new THREE.Vector3(0, 1.8, 0));
       SoundFX.whip();
       if (isHeavy) {
-        const stopPoint = bestEnemy.group.position.clone().addScaledVector(fwdFlat, -3.8);
-        stopPoint.y = Math.max(1.0, bestEnemy.group.position.y + 1.5);
-        const dur = Math.min(2.0, Math.max(0.2, bestEnemyDist / HARPOON_PULL_SPEED));
-        const vine = new OrganicTendril3D(scene, origin.clone(), tp, 0x2ecc71, 0.42, dur + 0.1);
+        const stopPoint = bestEnemy.group.position.clone().addScaledVector(fwdFlat, -3.5);
+        stopPoint.y = Math.max(1.2, bestEnemy.group.position.y + 1.5);
+        const dur = Math.min(1.4, Math.max(0.16, bestEnemyDist / HARPOON_PULL_SPEED));
+        const vine = new OrganicTendril3D(scene, origin.clone(), tp, 0x2ecc71, 0.45, dur + 0.12);
         activeTendrils.push(vine);
-        player._activeGrapple = { targetPos: stopPoint, initialDir: fwdFlat.clone(), speed: HARPOON_PULL_SPEED, timer: 0, maxDuration: dur, enemyRef: bestEnemy, tendril: vine };
-        spawnComicPop(origin.clone().add(new THREE.Vector3(0, 2, 0)), '*🌿 К БОССУ!*', '#ff2200');
+        player._activeGrapple = { targetPos: stopPoint, initialDir: stopPoint.clone().sub(player.pos).normalize(), speed: HARPOON_PULL_SPEED, timer: 0, maxDuration: dur, enemyRef: bestEnemy, tendril: vine, isRoofSnap: false };
+        player.dodgeIframes = Math.max(player.dodgeIframes, dur);
+        spawnComicPop(origin.clone().add(new THREE.Vector3(0, 2, 0)), '*🌿 РЫВОК К БОССУ!*', '#ff2200');
       } else {
-        if (activeTendrils.length < 10) activeTendrils.push(new OrganicTendril3D(scene, origin.clone(), tp, 0x2ecc71, 0.42, 0.4));
+        if (activeTendrils.length < 10) activeTendrils.push(new OrganicTendril3D(scene, origin.clone(), tp, 0x2ecc71, 0.42, 0.35));
         spawnComicPop(origin.clone().add(new THREE.Vector3(0, 2, 0)), '*ИДИ СЮДА!*', '#2ecc71');
         const capE = bestEnemy;
-        capE._rooted = 1.0;
-        const pullDest = player.pos.clone().addScaledVector(fwdFlat, 2.5);
+        capE._rooted = 1.1;
+        const pullDest = player.pos.clone().addScaledVector(fwdFlat, 2.4);
         let step = 0;
         const pullTimer = setInterval(() => {
           step++;
-          if (!capE || !capE.group || !capE.group.parent || step >= 8) {
+          if (!capE || !capE.group || !capE.group.parent || step >= 6) {
             clearInterval(pullTimer);
             if (capE && capE.group && capE.group.parent) {
               const st = carrotStats();
               spawnSlashArc(player.pos.clone().add(new THREE.Vector3(0, 2, 0)), player.facingYaw, 0, 0x2ecc71, 8.5, 0.35);
-              damageEnemy(capE, st.dmg * 3.4, fwdFlat.clone().multiplyScalar(8), '*УДАР С РАЗВОРОТА!*');
+              damageEnemy(capE, st.dmg * 3.5, fwdFlat.clone().multiplyScalar(8), '*УДАР С РАЗВОРОТА!*');
             }
             return;
           }
-          capE.group.position.lerp(pullDest, 0.42);
-        }, 25);
+          capE.group.position.lerp(pullDest, 0.5);
+        }, 20);
       }
       return;
     }
+
     if (validBuildHit) {
       _newVineCd = VINE_CD;
-      const hp = validBuildHit.point;
-      const distB = validBuildHit.distance;
-      const dur = Math.min(2.6, Math.max(0.22, distB / HARPOON_PULL_SPEED));
-      const vine = new OrganicTendril3D(scene, origin.clone(), hp.clone(), 0x2ecc71, 0.40, dur + 0.1);
+      const hp = validBuildHit.point.clone();
+      const isNearRoof = validBuildHit.topY && hp.y >= validBuildHit.topY - 6.0;
+      const destPoint = hp.clone().addScaledVector(fwdFlat, isNearRoof ? 1.5 : -1.8);
+      if (isNearRoof) destPoint.y = validBuildHit.topY + 1.5;
+      const distB = player.pos.distanceTo(destPoint);
+      const dur = Math.min(2.2, Math.max(0.18, distB / HARPOON_PULL_SPEED));
+      const vine = new OrganicTendril3D(scene, origin.clone(), hp, 0x2ecc71, 0.44, dur + 0.12);
       activeTendrils.push(vine);
-      player._activeGrapple = { targetPos: hp, initialDir: fwdFlat.clone(), speed: HARPOON_PULL_SPEED, timer: 0, maxDuration: dur, enemyRef: null, tendril: vine };
-      player.isGrounded = false; player.isBulletdropping = false;
+      player._activeGrapple = { targetPos: destPoint, initialDir: destPoint.clone().sub(player.pos).normalize(), speed: HARPOON_PULL_SPEED, timer: 0, maxDuration: dur, enemyRef: null, tendril: vine, isRoofSnap: isNearRoof };
+      player.isGrounded = false; player.isWallRunning = false; player.isBulletdropping = false;
       player.facingYaw = player.camYaw;
-      SoundFX.swing(480);
+      if (typeof postUniforms !== 'undefined' && postUniforms.uRadialBlur) postUniforms.uRadialBlur.value = 0.9;
+      SoundFX.swing(540);
       spawnComicPop(origin.clone().add(new THREE.Vector3(0, 2, 0)), `*🌿 ГАРПУН (${Math.round(distB)}М)*`, '#2ecc71');
       return;
     }
+
     _newVineCd = VINE_CD;
-    const shortTarget = player.pos.clone().addScaledVector(fwdFlat, 24);
-    shortTarget.y = Math.max(1.5, player.pos.y + 4.0);
-    const vine = new OrganicTendril3D(scene, origin.clone(), shortTarget.clone(), 0x2ecc71, 0.35, 0.42);
+    const airTarget = origin.clone().addScaledVector(camDir, 65);
+    airTarget.y = Math.max(2.5, airTarget.y);
+    const vine = new OrganicTendril3D(scene, origin.clone(), airTarget.clone(), 0x2ecc71, 0.36, 0.45);
     activeTendrils.push(vine);
-    player._activeGrapple = { targetPos: shortTarget, initialDir: fwdFlat.clone(), speed: 44, timer: 0, maxDuration: 0.42, enemyRef: null, tendril: vine };
-    player.facingYaw = player.camYaw;
-    SoundFX.swing(420);
+    player._activeGrapple = { targetPos: airTarget, initialDir: camDir.clone(), speed: 130, timer: 0, maxDuration: 0.48, enemyRef: null, tendril: vine, isRoofSnap: false };
+    player.isGrounded = false; player.facingYaw = player.camYaw;
+    SoundFX.swing(460);
   };
 
   window.addEventListener('mousedown', function (e) {
@@ -3624,33 +3653,46 @@
       if (h.en.group && h.en.group.position) { h.en.group.position.x = h.x; h.en.group.position.z = h.z; }
     }
 
-    // Grapple movement (v110)
+        // Grapple movement (v201 Patched)
     if (player._activeGrapple) {
       const g = player._activeGrapple;
       g.timer += dt;
+      player.isWallRunning = false;
       const toTarget = g.targetPos.clone().sub(player.pos);
       const dist = toTarget.length();
-      const forwardDot = toTarget.x * g.initialDir.x + toTarget.z * g.initialDir.z;
-      if ((keys['Space'] && g.timer > 0.12) || dist <= 2.8 || forwardDot <= 0.2 || g.timer >= g.maxDuration || player.isWallRunning) {
+      const manualJumpCancel = keys['Space'] && g.timer > 0.08;
+      if (manualJumpCancel || dist <= 2.4 || g.timer >= g.maxDuration) {
         const finishedEnemy = g.enemyRef;
+        const launchDir = g.initialDir.clone();
+        const wasRoof = g.isRoofSnap;
         player._activeGrapple = null;
-        player.vel.set(g.initialDir.x * 4, Math.max(0, Math.min(8, player.vel.y)), g.initialDir.z * 4);
+        if (manualJumpCancel) {
+          player.vel.set(launchDir.x * 65, Math.max(26, launchDir.y * 45 + 22), launchDir.z * 65);
+          player.airFlipTimer = 0.5;
+          SoundFX.whip();
+          spawnComicPop(player.pos.clone().add(new THREE.Vector3(0, 2.5, 0)), '*🌿 РОГАТКА!*', '#adff2f');
+        } else if (wasRoof) {
+          player.vel.set(launchDir.x * 18, 16, launchDir.z * 18);
+        } else {
+          player.vel.set(launchDir.x * 28, Math.max(18, launchDir.y * 30 + 14), launchDir.z * 28);
+        }
         if (finishedEnemy && finishedEnemy.group && finishedEnemy.group.parent) {
           const st = carrotStats();
-          damageEnemy(finishedEnemy, st.dmg * 4.5, g.initialDir.clone().multiplyScalar(8), '*СОКРУШИТЕЛЬНЫЙ УДАР!*');
+          damageEnemy(finishedEnemy, st.dmg * 4.8, launchDir.clone().multiplyScalar(10), '*СОКРУШИТЕЛЬНЫЙ УДАР!*');
           spawnParticles(finishedEnemy.group.position.clone().add(new THREE.Vector3(0, 2, 0)), 0x2ecc71, 20);
           spawnGroundCrackRing(finishedEnemy.group.position, 0x2ecc71, 12);
         }
       } else {
         const dir = toTarget.clone().divideScalar(dist);
-        const step = Math.min(dist, g.speed * dt);
+        const curSpeed = g.speed * (1.0 + Math.min(0.5, g.timer * 1.2));
+        const step = Math.min(dist, curSpeed * dt);
         player.pos.addScaledVector(dir, step);
         player.vel.set(0, 0, 0);
         player.facingYaw = Math.atan2(-g.initialDir.x, -g.initialDir.z);
         playerGroup.position.copy(player.pos);
+        if (g.tendril && g.tendril.targetEnd) g.tendril.life = Math.max(g.tendril.life, 0.12);
       }
     }
-
     if (player.pos.y < 0) player.pos.y = 0;
 
     if (isFrozen) {
@@ -3915,4 +3957,92 @@
   }
 
   console.log('🍌 [BANANA MERGED v200] Всё загружено: 18 глав саги, 4 соло-босса, гарпун 240м, крио-куб, кристаллическая тюрьма, Sky-Rails, Evo-Модули, анатомическая геометрия, кинематика, рэгдоллы, аэро-спидеры и гидранты.');
+
+  // === ДОПОЛНИТЕЛЬНЫЕ МОДУЛИ АВТО-ПАТЧЕРА v201 ===
+
+  const _baseHarpoonV201 = window.carrotVineHarpoon;
+  window.carrotVineHarpoon = function () {
+    if (CARROT_MODE && CARROT_FORM === 1 && !player.isDead && _newVineCd <= 0 && window.__SKY_RAILS && window.__SKY_RAILS.length > 0) {
+      const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
+      for (let d = 15; d <= 120; d += 15) {
+        const probe = camera.position.clone().addScaledVector(camDir, d);
+        const railHit = findClosestSkyRailPoint(probe, 7.5);
+        if (railHit) {
+          _newVineCd = VINE_CD;
+          const origin = player.pos.clone().add(new THREE.Vector3(0, 2.2, 0));
+          activeTendrils.push(new OrganicTendril3D(scene, origin, railHit.point.clone(), 0x00f2fe, 0.4, 0.35));
+          SoundFX.whip();
+          startSkyRailGrind(railHit);
+          return;
+        }
+      }
+    }
+    return _baseHarpoonV201.apply(this, arguments);
+  };
+
+  const _chEl = document.getElementById('crosshair');
+  const _rangeBadge = document.createElement('div');
+  _rangeBadge.style.cssText = 'position:absolute;top:30px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:900;color:#2ecc71;text-shadow:1px 1px 0 #000;white-space:nowrap;pointer-events:none;';
+  if (_chEl) _chEl.appendChild(_rangeBadge);
+  setInterval(() => {
+    if (!_chEl || !gameStarted || player.isDead) return;
+    if (!CARROT_MODE || CARROT_FORM !== 1 || !window.raycastAllBuildingsAABB) {
+      _chEl.style.borderColor = 'rgba(255,0,85,0.85)'; _rangeBadge.innerText = ''; return;
+    }
+    const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
+    const hit = window.raycastAllBuildingsAABB(camera.position, camDir, HARPOON_MAX_RANGE);
+    if (hit) {
+      const dist = Math.round(hit.point.distanceTo(player.pos));
+      _chEl.style.borderColor = '#2ecc71'; _chEl.style.boxShadow = '0 0 12px #2ecc71';
+      _rangeBadge.innerText = '🌿 ' + dist + 'м';
+    } else {
+      _chEl.style.borderColor = 'rgba(255,159,26,0.75)'; _chEl.style.boxShadow = 'none';
+      _rangeBadge.innerText = '';
+    }
+  }, 80);
+
+  const STORY_SAVE_KEY_V201 = 'banana_v201_story_progress';
+  const _origStartStoryV201 = window.startStoryChapter;
+  window.startStoryChapter = function (ch) {
+    try { localStorage.setItem(STORY_SAVE_KEY_V201, JSON.stringify({ chapter: ch, ts: Date.now() })); } catch (e) {}
+    return _origStartStoryV201.call(this, ch);
+  };
+  setTimeout(() => {
+    try {
+      const sv = JSON.parse(localStorage.getItem(STORY_SAVE_KEY_V201) || 'null');
+      if (sv && sv.chapter > 1 && sv.chapter <= 18) {
+        window.startStoryChapter(sv.chapter);
+        showPatchToast('📖 САГА ПРОДОЛЖЕНА', 'Загружена глава ' + sv.chapter + '/18', '#00f2fe');
+      }
+    } catch (e) {}
+  }, 1150);
+
+  const cdBarWrap = document.createElement('div');
+  cdBarWrap.id = 'universal-cd-hud';
+  cdBarWrap.style.cssText = 'position:fixed;bottom:92px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:22;pointer-events:none;';
+  document.body.appendChild(cdBarWrap);
+  setInterval(() => {
+    if (!gameStarted || player.isDead) { cdBarWrap.innerHTML = ''; return; }
+    let items = [];
+    if (CARROT_MODE) {
+      items = CARROT_FORM === 1
+        ? [['ПКМ Гарпун', _newVineCd], ['Q Сверло', player.devastatorCd], ['F Корни', player.carrotRootBindCd], ['T Врата', player.pepperTBeamCd]]
+        : [['ПКМ Бур', player._giantDrillCd || 0], ['Q Сверло', player.devastatorCd], ['C Земля', player._earthquakeCd || 0], ['F Корни', player.carrotRootBindCd]];
+    } else if (PEPPER_MODE) {
+      items = [['ПКМ/Q Взрыв', player.devastatorCd], ['F Рывок (' + player.fireDashCharges + ')', 0], ['Ctrl Пике', player.diveAttackCd], ['T Пекло', player.pepperTBeamCd]];
+    } else if (LEMON_MODE) {
+      items = [['ПКМ Импульс', player.isFlying ? player.lemonSalvoCd : player.lemonRepulseCd], ['F Пауки', player.lemonSummonCd], ['G Камикадзе', player.lemonKamikazeCd], ['T Ульт', player.lemonUltCd]];
+    } else if (window.__POTATO_MODE) {
+      items = window.__POTATO_FORM === 1
+        ? [['Q Молот', player._potatoSlamCd], ['F Таран', player._potatoRamCd], ['C Корни', player._potatoHealCd]]
+        : [['Q Нова', player._potatoNovaCd], ['F Соус', player._potatoSauceCd], ['C Пламя', player._potatoRageCd], ['T Портал', player._potatoPortalCd]];
+    } else {
+      items = [['ПКМ/Q Дев', player.devastatorCd], ['F Способн.', player.uniqueCd], ['C Крио', player._cryoCd || 0], ['X Казнь', player.executionCd]];
+    }
+    cdBarWrap.innerHTML = items.map(([lbl, cd]) => {
+      const ready = !cd || cd <= 0.05;
+      return '<div style="background:rgba(8,14,12,0.92);border:2px solid #000;outline:2px solid ' + (ready ? '#00ff66' : '#ff9f1a') + ';padding:4px 9px;font-size:11px;font-weight:900;color:' + (ready ? '#eaffea' : '#ffcc66') + ';transform:skewX(-6deg);box-shadow:3px 3px 0 #000;">' + lbl + ': ' + (ready ? 'ГОТОВО' : cd.toFixed(1) + 'с') + '</div>';
+    }).join('');
+  }, 100);
+
 })();
