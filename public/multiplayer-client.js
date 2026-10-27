@@ -1,4 +1,4 @@
-/* Banana Industries — Multiplayer Client v26 (PvP Balance Fix) */
+/* Banana Industries — Multiplayer Client v27 (Full Fix) */
 (function(){
 'use strict';
 
@@ -80,18 +80,17 @@ window.__mpHit = function(id, dmg, crit, popText){
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SEND PVP ABILITY
+// SEND PVP ABILITY (с ry)
 // ═══════════════════════════════════════════════════════════════════════════
 function sendPvPAbility(type, radius, dmg){
   if (!MP.room || !window.__MP_MODE || !player || !player.pos) return;
-  // Lemon passive +50% only to enemies — но для PvP нет, чтобы не баффать
-  // (урон в PvP идёт по базовым значениям PVP_ABILITIES)
   try {
     MP.room.send('pvp_ability', {
       type: type,
       radius: radius || 0,
       damage: dmg || 0,
-      x: player.pos.x, y: player.pos.y, z: player.pos.z
+      x: player.pos.x, y: player.pos.y, z: player.pos.z,
+      ry: player.facingYaw || player.camYaw || 0
     });
   } catch(e){}
 }
@@ -142,7 +141,7 @@ function spawnEffectVisual(type, x, y, z, radius){
     }
 
     var effectMap = {
-      // ═══ BANANA ═══
+      // BANANA
       devastator: function(){ ring(0xff0055, r || 20, 0.2); ring(0x00f2fe, r * 0.7, 0.25); burst(0xff0055, 20); },
       rocket: function(){ ring(0xff0055, r || 8, 0.2); burst(0xff7f00, 15); },
       freeze: function(){
@@ -166,8 +165,12 @@ function spawnEffectVisual(type, x, y, z, radius){
       },
       consume_heal: function(){ ring(0xff0055, r || 12, 0.2); burst(0xff0055, 20); },
       durian_ram: function(){ ring(0x78bd37, r || 10, 0.2); burst(0x78bd37, 20); },
+      banana_peels: function(){
+        ring(0xf9ca24, r || 20, 0.2);
+        burst(0xf9ca24, 20);
+      },
 
-      // ═══ PEPPER ═══
+      // PEPPER
       fire_fist: function(){ burst(0xff5500, 8); },
       fire_beam: function(){
         var beam = new THREE.Mesh(
@@ -190,7 +193,7 @@ function spawnEffectVisual(type, x, y, z, radius){
       pepper_dive: function(){ ring(0xff2200, r || 15, 0.2); burst(0xff2200, 25); },
       pepper_evolve: function(){ pillar(0xff2200, 20); burst(0xff2200, 25); },
 
-      // ═══ CARROT ═══
+      // CARROT
       root_bind: function(){ ring(0x2ecc71, r || 18, 0.2); burst(0x2ecc71, 20); },
       vine_harpoon: function(){ burst(0x2ecc71, 15); },
       earthquake: function(){
@@ -205,7 +208,7 @@ function spawnEffectVisual(type, x, y, z, radius){
       carrot_form: function(){ pillar(0xff5500, 22); ring(0xff5500, 18, 0.2); burst(0xff5500, 25); },
       carrot_ground_slam: function(){ ring(0x2ecc71, r || 15, 0.2); burst(0x2ecc71, 20); },
 
-      // ═══ LEMON ═══
+      // LEMON
       lemon_plasma: function(){ burst(0xffee00, 6); },
       repulse: function(){ ring(0x44ffaa, r || 8, 0.2); burst(0x44ffaa, 18); },
       acid_rain: function(){ ring(0x88ff00, r || 6, 0.15); burst(0x88ff00, 15); },
@@ -225,7 +228,7 @@ function spawnEffectVisual(type, x, y, z, radius){
       spider_bite: function(){ burst(0xffee00, 6); },
       summon: function(){ burst(0xff8800, 12); },
 
-      // ═══ POTATO ═══
+      // POTATO
       potato_slam: function(){
         ring(0x8B4513, r || 10, 0.2);
         ring(0xd4a017, (r || 10) * 0.7, 0.3);
@@ -240,13 +243,8 @@ function spawnEffectVisual(type, x, y, z, radius){
       },
       tomato_rage: function(){ pillar(0xff2200, 20); burst(0xff4400, 20); },
       tomato_sauce: function(){ ring(0xcc0000, r || 12, 0.2); burst(0xcc0000, 15); },
-      potato_electric_slam: function(){
-        ring(0xffaa00, r || 12, 0.2);
-        ring(0xfff200, (r || 12) * 0.6, 0.3);
-        burst(0xffaa00, 25);
-      },
 
-      // ═══ BOSS ═══
+      // BOSS
       titan_hammer: function(){ ring(0xff7f00, r || 6, 0.2); burst(0xff7f00, 20); },
       lemon_lightning: function(){
         var bolt = new THREE.Mesh(
@@ -289,7 +287,7 @@ function waitFor(cond, cb, maxMs) {
 function hookAbility(fnName, abilityType) {
   var orig = window[fnName];
   if (typeof orig !== 'function') return false;
-  if (orig._mpHookedV26) return true;
+  if (orig._mpHookedV27) return true;
   var wrapped = function(){
     var ret = orig.apply(this, arguments);
     try {
@@ -299,20 +297,20 @@ function hookAbility(fnName, abilityType) {
     } catch(e){}
     return ret;
   };
-  wrapped._mpHookedV26 = true;
+  wrapped._mpHookedV27 = true;
   window[fnName] = wrapped;
   return true;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ХУКИ
+// ХУКИ БАЗОВЫЕ
 // ═══════════════════════════════════════════════════════════════════════════
 waitFor(function(){ return true; }, function(){
-  // ═══ BANANA ═══
+  // BANANA (devastator — все suit 0-4)
   hookAbility('unleashDevastatorExplosion', 'devastator');
   hookAbility('fireRocket', 'rocket');
 
-  // ═══ PEPPER ═══
+  // PEPPER
   hookAbility('pepperFireFist', 'fire_fist');
   hookAbility('pepperFireBeam', 'fire_beam');
   hookAbility('pepperExplosion', 'devastator');
@@ -320,28 +318,64 @@ waitFor(function(){ return true; }, function(){
   hookAbility('pepperFastFireDash', 'pepper_dash');
   hookAbility('pepperDiveAttack', 'pepper_dive');
 
-  // ═══ CARROT ═══
+  // CARROT
   hookAbility('carrotRootBind', 'root_bind');
   hookAbility('carrotVineHarpoon', 'vine_harpoon');
   hookAbility('carrotEarthquake', 'earthquake');
   hookAbility('carrotGiantDrillDash', 'drill');
 
-  // ═══ LEMON ═══
+  // LEMON
   hookAbility('lemonRepulse', 'repulse');
   hookAbility('lemonAcidRain', 'acid_rain');
   hookAbility('lemonSalvo', 'lemon_salvo');
   hookAbility('lemonGroundSlam', 'lemon_ground_slam');
   hookAbility('lemonUltimate', 'ult_lemon');
 
-  console.log('[MP] ✓ Базовые хуки установлены (v26)');
+  console.log('[MP] ✓ Базовые хуки v27');
 }, 5000);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F-СПОСОБНОСТИ КОСТЮМОВ БАНАНА (suit 1, 2)
+// ═══════════════════════════════════════════════════════════════════════════
+waitFor(function(){ return typeof window.triggerUniqueAbilityF === 'function'; }, function(){
+  var _origF = window.triggerUniqueAbilityF;
+  if (_origF._mpHookedV27) return;
+
+  window.triggerUniqueAbilityF = function(){
+    var beforeCd = (player && player.uniqueCd) || 0;
+    var beforeDurian = player && player.durianRam;
+    var ret;
+    try { ret = _origF.apply(this, arguments); } catch(e){ return; }
+
+    try {
+      if (!MP.room || !window.__MP_MODE || !player) return ret;
+      if (window.__POTATO_MODE) return ret;
+      if (player.character !== 'banana') return ret;
+      if (window.PEPPER_MODE || window.CARROT_MODE || window.LEMON_MODE) return ret;
+
+      var idx = player.suitIdx | 0;
+
+      if (idx === 2 && !beforeDurian && player.durianRam) {
+        sendPvPAbility('durian_ram');
+        console.log('[MP] ✓ durian_ram sent (suit 2)');
+      } else if (idx === 1 && player.uniqueCd > beforeCd + 0.5) {
+        sendPvPAbility('banana_peels');
+        console.log('[MP] ✓ banana_peels sent (suit 1)');
+      }
+    } catch(e){}
+
+    return ret;
+  };
+  window.triggerUniqueAbilityF._mpHookedV27 = true;
+  console.log('[MP] ✓ triggerUniqueAbilityF захукан (suit 1, 2)');
+}, 8000);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // pepper_evolve
 // ═══════════════════════════════════════════════════════════════════════════
 waitFor(function(){ return typeof window.togglePepperEvolution === 'function'; }, function(){
   var _origEvo = window.togglePepperEvolution;
-  if (_origEvo._mpHookedV26) return;
+  if (_origEvo._mpHookedV27) return;
   window.togglePepperEvolution = function(){
     if (!MP.room || !window.__MP_MODE) return _origEvo.apply(this, arguments);
     var wasEvolved = !!(player && player.pepperEvolved);
@@ -353,7 +387,7 @@ waitFor(function(){ return typeof window.togglePepperEvolution === 'function'; }
     } catch(e){}
     return ret;
   };
-  window.togglePepperEvolution._mpHookedV26 = true;
+  window.togglePepperEvolution._mpHookedV27 = true;
   console.log('[MP] ✓ togglePepperEvolution захукан');
 }, 5000);
 
@@ -362,25 +396,23 @@ waitFor(function(){ return typeof window.togglePepperEvolution === 'function'; }
 // ═══════════════════════════════════════════════════════════════════════════
 waitFor(function(){ return typeof window.toggleCarrotForm === 'function'; }, function(){
   var _origForm = window.toggleCarrotForm;
-  if (_origForm._mpHookedV26) return;
+  if (_origForm._mpHookedV27) return;
   window.toggleCarrotForm = function(){
     if (!MP.room || !window.__MP_MODE) return _origForm.apply(this, arguments);
     var beforeForm = (typeof window.CARROT_FORM !== 'undefined') ? window.CARROT_FORM : 1;
     var ret = _origForm.apply(this, arguments);
     try {
       var afterForm = (typeof window.CARROT_FORM !== 'undefined') ? window.CARROT_FORM : 1;
-      if (beforeForm !== afterForm) {
-        sendPvPAbility('carrot_form');
-      }
+      if (beforeForm !== afterForm) sendPvPAbility('carrot_form');
     } catch(e){}
     return ret;
   };
-  window.toggleCarrotForm._mpHookedV26 = true;
+  window.toggleCarrotForm._mpHookedV27 = true;
   console.log('[MP] ✓ toggleCarrotForm захукан');
 }, 5000);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// freeze (крио-куб) — по keydown C
+// freeze (крио-куб C)
 // ═══════════════════════════════════════════════════════════════════════════
 window.addEventListener('keydown', function(e){
   if (e.code !== 'KeyC') return;
@@ -402,7 +434,7 @@ window.addEventListener('keydown', function(e){
 // ═══════════════════════════════════════════════════════════════════════════
 waitFor(function(){ return typeof window.performConsume === 'function'; }, function(){
   var _origConsume = window.performConsume;
-  if (_origConsume._mpHookedV26) return;
+  if (_origConsume._mpHookedV27) return;
   window.performConsume = function(){
     var ret = _origConsume.apply(this, arguments);
     try {
@@ -412,7 +444,7 @@ waitFor(function(){ return typeof window.performConsume === 'function'; }, funct
     } catch(e){}
     return ret;
   };
-  window.performConsume._mpHookedV26 = true;
+  window.performConsume._mpHookedV27 = true;
   console.log('[MP] ✓ performConsume захукан');
 }, 5000);
 
@@ -421,24 +453,23 @@ waitFor(function(){ return typeof window.performConsume === 'function'; }, funct
 // ═══════════════════════════════════════════════════════════════════════════
 waitFor(function(){ return typeof window.lemonKamikaze === 'function'; }, function(){
   var _k = window.lemonKamikaze;
-  if (_k._mpHookedV26) return;
+  if (_k._mpHookedV27) return;
   window.lemonKamikaze = function(){
     if (MP.room && window.__MP_MODE) {
       if (player && player.lemonKamikazeCd > 0) return;
       if (player) player.lemonKamikazeCd = 5;
-      // Только серверное сообщение — взрыв у цели делает сервер
       try { MP.room.send('kamikaze_spiders', {}); } catch(e){}
       return;
     }
     return _k.apply(this, arguments);
   };
-  window.lemonKamikaze._mpHookedV26 = true;
+  window.lemonKamikaze._mpHookedV27 = true;
   console.log('[MP] ✓ lemonKamikaze → server');
 }, 5000);
 
 waitFor(function(){ return typeof window.lemonSummonSpiders === 'function'; }, function(){
   var _s = window.lemonSummonSpiders;
-  if (_s._mpHookedV26) return;
+  if (_s._mpHookedV27) return;
   window.lemonSummonSpiders = function(){
     if (MP.room && window.__MP_MODE) {
       if (player && player.lemonSummonCd > 0) return;
@@ -448,12 +479,12 @@ waitFor(function(){ return typeof window.lemonSummonSpiders === 'function'; }, f
     }
     return _s.apply(this, arguments);
   };
-  window.lemonSummonSpiders._mpHookedV26 = true;
+  window.lemonSummonSpiders._mpHookedV27 = true;
   console.log('[MP] ✓ lemonSummonSpiders → server');
 }, 5000);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// LEMON PLASMA SHOT → pvp_ability lemon_plasma
+// LEMON PLASMA SHOT
 // ═══════════════════════════════════════════════════════════════════════════
 waitFor(function(){ return typeof window.lemonPlasmaShot === 'function'; }, function(){
   if (window.__MP_lemonPlasma_hooked) return;
@@ -465,7 +496,7 @@ waitFor(function(){ return typeof window.lemonPlasmaShot === 'function'; }, func
     try {
       if (MP.room && window.__MP_MODE) {
         MP.room.send('attack', {});
-        sendPvPAbility('lemon_plasma');   // ★ снаряд летит в цель
+        sendPvPAbility('lemon_plasma');
       }
     } catch(e){}
     return ret;
@@ -474,7 +505,7 @@ waitFor(function(){ return typeof window.lemonPlasmaShot === 'function'; }, func
 }, 5000);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// LEMON LASER → pvp_beam (мультицель, конус)
+// LEMON LASER → pvp_beam
 // ═══════════════════════════════════════════════════════════════════════════
 setInterval(function(){
   if (!MP.room || !window.__MP_MODE) return;
@@ -494,14 +525,18 @@ setInterval(function(){
         hits.push(id);
       } catch(e){}
     });
-    if (hits.length > 0) MP.room.send('pvp_beam', { targetIds: hits });
+    if (hits.length > 0) {
+      MP.room.send('pvp_beam', {
+        targetIds: hits,
+        x: player.pos.x, y: player.pos.y, z: player.pos.z,
+        ry: player.facingYaw || player.camYaw || 0
+      });
+    }
   } catch(e){}
 }, 180);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ⚠️ POTATO POLLING — заменяет сломанные хуки для картошки
-// (game-patch перезаписывает performDevastator/triggerUniqueAbilityF
-//  без делегации → хуки не срабатывают. Отслеживаем КД-поля.)
+// POTATO POLLING
 // ═══════════════════════════════════════════════════════════════════════════
 var _lastPotatoSlam  = 0;
 var _lastPotatoNova  = 0;
@@ -524,31 +559,12 @@ setInterval(function(){
   var curHeal  = player._potatoHealCd  || 0;
   var curRage  = player._potatoRageCd  || 0;
 
-  // КД вырос на >0.5с → способность только что сработала
-  if (curSlam > _lastPotatoSlam + 0.5) {
-    try { sendPvPAbility('potato_slam'); } catch(e){}
-    console.log('[MP] ✓ potato_slam sent');
-  }
-  if (curNova > _lastPotatoNova + 0.5) {
-    try { sendPvPAbility('tomato_nova'); } catch(e){}
-    console.log('[MP] ✓ tomato_nova sent');
-  }
-  if (curRam > _lastPotatoRam + 0.5) {
-    try { sendPvPAbility('potato_ram'); } catch(e){}
-    console.log('[MP] ✓ potato_ram sent');
-  }
-  if (curSauce > _lastPotatoSauce + 0.5) {
-    try { sendPvPAbility('tomato_sauce'); } catch(e){}
-    console.log('[MP] ✓ tomato_sauce sent');
-  }
-  if (curHeal > _lastPotatoHeal + 0.5) {
-    try { sendPvPAbility('potato_heal'); } catch(e){}
-    console.log('[MP] ✓ potato_heal sent');
-  }
-  if (curRage > _lastPotatoRage + 0.5) {
-    try { sendPvPAbility('tomato_rage'); } catch(e){}
-    console.log('[MP] ✓ tomato_rage sent');
-  }
+  if (curSlam > _lastPotatoSlam + 0.5) { try { sendPvPAbility('potato_slam'); } catch(e){} }
+  if (curNova > _lastPotatoNova + 0.5) { try { sendPvPAbility('tomato_nova'); } catch(e){} }
+  if (curRam > _lastPotatoRam + 0.5) { try { sendPvPAbility('potato_ram'); } catch(e){} }
+  if (curSauce > _lastPotatoSauce + 0.5) { try { sendPvPAbility('tomato_sauce'); } catch(e){} }
+  if (curHeal > _lastPotatoHeal + 0.5) { try { sendPvPAbility('potato_heal'); } catch(e){} }
+  if (curRage > _lastPotatoRage + 0.5) { try { sendPvPAbility('tomato_rage'); } catch(e){} }
 
   _lastPotatoSlam  = curSlam;
   _lastPotatoNova  = curNova;
@@ -556,6 +572,26 @@ setInterval(function(){
   _lastPotatoSauce = curSauce;
   _lastPotatoHeal  = curHeal;
   _lastPotatoRage  = curRage;
+}, 50);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CARROT Q DEVASTATOR POLLING
+// ═══════════════════════════════════════════════════════════════════════════
+var _lastCarrotDevCd = 0;
+
+setInterval(function(){
+  if (!MP.room || !window.__MP_MODE || !player || player.isDead) {
+    _lastCarrotDevCd = 0;
+    return;
+  }
+  if (player.character !== 'carrot') { _lastCarrotDevCd = 0; return; }
+
+  var curDevCd = player.devastatorCd || 0;
+  if (curDevCd > _lastCarrotDevCd + 0.5) {
+    try { sendPvPAbility('drill'); } catch(e){}
+    console.log('[MP] ✓ carrot Q drill sent');
+  }
+  _lastCarrotDevCd = curDevCd;
 }, 50);
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -828,7 +864,7 @@ function addRemote(id, d){
     target: new THREE.Vector3(Number(d.x) || 0, Number(d.y) || 0, Number(d.z) || 0),
     yaw: Number(d.ry) || 0, anim: 0,
     lastChar: d.char || 'banana',
-    lastSuit: d.suit | 0,
+    lastSuit: (typeof d.suit === 'number') ? (d.suit | 0) : 0,
     lastEvo: !!d.pepperEvolved,
     lastForm: (d.carrotForm | 0) || 1,
     lastPotatoForm: (d.potatoForm | 0) || 1
@@ -861,7 +897,7 @@ function recreateRemote(id, r, p){
   r.group = g;
   r.mesh = mesh;
   r.lastChar = p.char || 'banana';
-  r.lastSuit = p.suit | 0;
+  r.lastSuit = (typeof p.suit === 'number') ? (p.suit | 0) : 0;
   r.lastEvo = !!p.pepperEvolved;
   r.lastForm = (p.carrotForm | 0) || 1;
   r.lastPotatoForm = (p.potatoForm | 0) || 1;
@@ -954,7 +990,7 @@ function removeServerEnemy(id){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SPIDERS (сервер)
+// SPIDERS
 // ═══════════════════════════════════════════════════════════════════════════
 function addSpider(id, d){
   if (!safeId(id) || !d) return;
@@ -1026,7 +1062,7 @@ function setFrozenViz(active){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SYNC SELF
+// SYNC SELF FROM SERVER (прямой HP-синк)
 // ═══════════════════════════════════════════════════════════════════════════
 function syncSelfFromServer(me){
   if (!me || !player) return;
@@ -1063,21 +1099,16 @@ function syncSelfFromServer(me){
   var serverMaxHp = Number(me.maxHp);
   var serverDead = !!me.dead;
 
-  if (isFinite(serverMaxHp) && serverMaxHp > 0) {
-    MP._myServerMaxHp = serverMaxHp;
-    if (player.maxHp !== serverMaxHp) player.maxHp = serverMaxHp;
+  if (isFinite(serverMaxHp) && serverMaxHp > 0 && player.maxHp !== serverMaxHp) {
+    player.maxHp = serverMaxHp;
   }
+
+  // ★ Прямой HP-синк — сервер авторитетен для PvP
   if (isFinite(serverHp)) {
-    if (serverHp < player.hp - 1) {
-      var diff = Math.round(player.hp - serverHp);
-      if (diff > 0 && !player.isDead) {
-        try { if (typeof applyDamageToHero === 'function') applyDamageToHero(diff); } catch(e){}
-      }
+    if (Math.abs(player.hp - serverHp) > 0.5) {
       player.hp = serverHp;
-    } else {
-      player.hp = serverHp;
+      if (typeof updateHUD === 'function') { try { updateHUD(); } catch(e){} }
     }
-    MP._myServerHp = serverHp;
   }
 
   if (serverDead && !player.isDead) {
@@ -1318,7 +1349,7 @@ function attach(room){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// START NET
+// START NET (фикс suit 0 → 4)
 // ═══════════════════════════════════════════════════════════════════════════
 function startNet(fn){
   ensureLib(function(){
@@ -1341,7 +1372,8 @@ function startNet(fn){
       };
       $('mp-code').value = opts.code;
       MP._lastCharState = {
-        suit: opts.suit, char: opts.char,
+        suit: (typeof opts.suit === 'number') ? opts.suit : 4,   // ★ не превращать 0→4
+        char: opts.char,
         pepperEvolved: opts.pepperEvolved,
         carrotForm: opts.carrotForm,
         potatoForm: opts.potatoForm
@@ -1395,12 +1427,12 @@ setInterval(function(){
 }, 30);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CHAR STATE SYNC
+// CHAR STATE SYNC (фикс suit 0 → 4)
 // ═══════════════════════════════════════════════════════════════════════════
 setInterval(function(){
   try {
     if (!MP.room || !window.__MP_MODE || !player) return;
-    var curSuit = (player.suitIdx | 0) || 4;
+    var curSuit = (typeof player.suitIdx === 'number') ? (player.suitIdx | 0) : 4;   // ★
     var curChar = player.character || 'banana';
     var curEvo = !!player.pepperEvolved;
     var curForm = 1;
@@ -1428,7 +1460,7 @@ setInterval(function(){
 }, 200);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PVP MELEE
+// PVP MELEE (с позицией)
 // ═══════════════════════════════════════════════════════════════════════════
 function tryPvP(){
   try {
@@ -1437,7 +1469,7 @@ function tryPvP(){
     if (typeof isLabOpen !== 'undefined' && isLabOpen) return;
     if (MP.remotes.size === 0) return;
 
-    var bestId = null, bestD = 7.5;
+    var bestId = null, bestD = 8;
     MP.remotes.forEach(function(r, id){
       try {
         var d = r.group.position.distanceTo(player.pos);
@@ -1445,8 +1477,12 @@ function tryPvP(){
       } catch(e){}
     });
     if (bestId) {
-      var dmg = (player.character === 'lemon') ? 55 : 40;
-      MP.room.send('pvp', { targetId: bestId, damage: dmg });
+      MP.room.send('pvp', {
+        targetId: bestId,
+        damage: (player.character === 'lemon') ? 55 : 40,
+        x: player.pos.x, y: player.pos.y, z: player.pos.z,
+        ry: player.facingYaw || 0
+      });
     }
   } catch(e){}
 }
@@ -1527,7 +1563,7 @@ function tick(){
           var p = MP.room.state.players.get(id);
           if (!p) return;
           var curChar = p.char || 'banana';
-          var curSuit = p.suit | 0;
+          var curSuit = (typeof p.suit === 'number') ? (p.suit | 0) : 0;
           var curEvo = !!p.pepperEvolved;
           var curForm = (p.carrotForm | 0) || 1;
           var curPotatoForm = (p.potatoForm | 0) || 1;
@@ -1654,7 +1690,7 @@ function tick(){
 }
 tick();
 
-console.log('[MP] v26 готов. Лимон/дроны, potato polling, баланс урона.');
-console.log('[MP] Banana devastator=45, nano_ult=500; Lemon plasma=30 + laser 12/тик + пауки 30/укус; Potato: Q=120, F=90, heal=200.');
+console.log('[MP] v27 готов. Все способности 5 персонажей + все костюмы банана работают в PvP.');
+console.log('[MP] PvP-баланс: devastator 45, rocket 70, fire_fist 35, potato_slam 120, lemon_plasma конус 25м.');
 
 })();
