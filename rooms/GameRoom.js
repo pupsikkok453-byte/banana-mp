@@ -56,7 +56,7 @@ schema.defineTypes(State, {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PVP_ABILITIES — ПЕРЕБАЛАНСИРОВАННЫЙ КАТАЛОГ
+// PVP_ABILITIES — ПЕРЕБАЛАНСИРОВАННЫЙ КАТАЛОГ (v27)
 // ═══════════════════════════════════════════════════════════════════════════
 const PVP_ABILITIES = {
   // ═══ BANANA ═══
@@ -66,6 +66,7 @@ const PVP_ABILITIES = {
   nano_ult:             { radius: 25,   dmg: 500,  cd: 102500, cone: true },
   consume_heal:         { radius: 12,   dmg: 0,    cd: 8000,   heal: 60 },
   durian_ram:           { radius: 10,   dmg: 80,   cd: 12000,  knockback: 6 },
+  banana_peels:         { radius: 20,   dmg: 30,   cd: 12000,  cone: true },
 
   // ═══ PEPPER ═══
   fire_fist:            { radius: 6,    dmg: 35,   cd: 400,    knockback: 3 },
@@ -84,7 +85,7 @@ const PVP_ABILITIES = {
   carrot_ground_slam:   { radius: 15,   dmg: 60,   cd: 2000,   knockback: 4 },
 
   // ═══ LEMON ═══
-  lemon_plasma:         { radius: 4,    dmg: 30,   cd: 400,    knockback: 0 },
+  lemon_plasma:         { radius: 25,   dmg: 30,   cd: 400,    cone: true },
   repulse:              { radius: 8,    dmg: 50,   cd: 1000,   knockback: 8 },
   acid_rain:            { radius: 6,    dmg: 25,   cd: 800,    dot: true },
   lemon_salvo:          { radius: 25,   dmg: 110,  cd: 4000,   cone: true },
@@ -98,8 +99,7 @@ const PVP_ABILITIES = {
   potato_ram:           { radius: 8,    dmg: 90,   cd: 6000,   knockback: 6 },
   tomato_nova:          { radius: 10,   dmg: 160,  cd: 5000,   knockback: 5 },
   tomato_rage:          { radius: 0,    dmg: 0,    cd: 12000,  selfBuff: 'tomato_rage' },
-  tomato_sauce:         { radius: 12,   dmg: 70,   cd: 3000,   knockback: 3 },
-  potato_electric_slam: { radius: 12,   dmg: 200,  cd: 5000,   knockback: 5 }
+  tomato_sauce:         { radius: 12,   dmg: 70,   cd: 3000,   knockback: 3 }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -112,6 +112,7 @@ const CHAR_MAP = {
   nano_ult:             ['banana'],
   consume_heal:         ['banana'],
   durian_ram:           ['banana'],
+  banana_peels:         ['banana'],
 
   fire_fist:            ['pepper'],
   fire_beam:            ['pepper'],
@@ -140,8 +141,7 @@ const CHAR_MAP = {
   potato_ram:           ['potato'],
   tomato_nova:          ['potato'],
   tomato_rage:          ['potato'],
-  tomato_sauce:         ['potato'],
-  potato_electric_slam: ['potato']
+  tomato_sauce:         ['potato']
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -233,7 +233,7 @@ class GameRoom extends colyseus.Room {
       if (typeof d.potatoForm === 'number') p.potatoForm = clamp(d.potatoForm | 0, 1, 2);
 
       if (p.char === 'carrot') p.maxHp = (p.carrotForm === 2) ? 800 : 480;
-      else if (p.char === 'banana') p.maxHp = [350, 420, 600, 450, 500][p.suit] || 500;
+      else if (p.char === 'banana') p.maxHp = [400, 450, 600, 500, 520][p.suit] || 500;
       else if (p.char === 'pepper') p.maxHp = 420;
       else if (p.char === 'lemon') p.maxHp = 400;
       else if (p.char === 'potato') p.maxHp = (p.potatoForm === 1) ? 800 : 620;
@@ -247,7 +247,7 @@ class GameRoom extends colyseus.Room {
       if (p && !p.dead) p.attackAnim = 1;
     });
 
-    // ─── Hits on enemies ───
+    // ─── Hits on enemies (расширено до 120м для дальних абилок) ───
     this.onMessage('hit_batch', (client, d) => {
       if (!d || !Array.isArray(d.hits)) return;
       const attacker = this.state.players.get(client.sessionId);
@@ -260,7 +260,7 @@ class GameRoom extends colyseus.Room {
         if (!hit || !hit.id) return;
         const enemy = this.state.enemies.get(hit.id);
         if (!enemy) return;
-        if (distXZ(attacker, enemy) > 25 * 25 || dyAbs(attacker, enemy) > 40) return;
+        if (distXZ(attacker, enemy) > 120 * 120 || dyAbs(attacker, enemy) > 60) return;
         enemy.hp -= clamp(num(hit.dmg, 0), 1, 8000);
         this.lastHitBy.set(hit.id, client.sessionId);
         this.broadcast('dmg', { enemyId: hit.id, amount: hit.dmg, crit: !!hit.crit });
@@ -269,16 +269,14 @@ class GameRoom extends colyseus.Room {
     });
 
     // ═══════════════════════════════════════════════════════════════════════
-    // pvp_ability — основной обработчик
+    // pvp_ability — основная способность (позиция/поворот из сообщения)
     // ═══════════════════════════════════════════════════════════════════════
     this.onMessage('pvp_ability', (client, d) => {
       if (!d || !d.type) return;
       const atk = this.state.players.get(client.sessionId);
       if (!atk || atk.dead) return;
-
       const def = PVP_ABILITIES[d.type];
       if (!def) return;
-
       const allowed = CHAR_MAP[d.type];
       if (allowed && allowed.indexOf(atk.char) === -1) return;
 
@@ -286,54 +284,62 @@ class GameRoom extends colyseus.Room {
       if (Date.now() - (this.playerAttackCd.get(cdKey) || 0) < def.cd) return;
       this.playerAttackCd.set(cdKey, Date.now());
 
+      // ★ Используем позицию и поворот из сообщения
+      const ax = num(d.x, atk.x);
+      const ay = num(d.y, atk.y);
+      const az = num(d.z, atk.z);
+      const ary = num(d.ry, atk.ry);
+
+      const sanityDist = Math.hypot(ax - atk.x, az - atk.z);
+      if (sanityDist < 20) {
+        atk.x = clamp(ax, -2700, 2700);
+        atk.y = clamp(ay, 0, 400);
+        atk.z = clamp(az, -2700, 2700);
+        atk.ry = ary;
+      }
+
       let dmg = def.dmg;
       if (d.type === 'devastator' && atk.char === 'pepper') dmg = 55;
 
       // ═══ SELF-ONLY эффекты ═══
       if (def.heal && def.heal > 0) {
         atk.hp = Math.min(atk.maxHp, atk.hp + def.heal);
-        this.broadcast('effect', {
-          type: d.type, x: atk.x, y: atk.y, z: atk.z, radius: 0
-        }, { except: client });
+        this.broadcast('effect', { type: d.type, x: atk.x, y: atk.y, z: atk.z, radius: 0 }, { except: client });
         return;
       }
       if (def.selfBuff === 'pepper_evolved') {
         atk.pepperEvolved = true;
-        this.broadcast('effect', {
-          type: d.type, x: atk.x, y: atk.y, z: atk.z, radius: 0
-        }, { except: client });
+        this.broadcast('effect', { type: d.type, x: atk.x, y: atk.y, z: atk.z, radius: 0 }, { except: client });
         return;
       }
       if (def.selfBuff === 'carrot_form_toggle') {
         atk.carrotForm = (atk.carrotForm === 2) ? 1 : 2;
         atk.maxHp = (atk.carrotForm === 2) ? 800 : 480;
         if (atk.hp > atk.maxHp) atk.hp = atk.maxHp;
-        this.broadcast('effect', {
-          type: d.type, x: atk.x, y: atk.y, z: atk.z, radius: 0
-        }, { except: client });
+        this.broadcast('effect', { type: d.type, x: atk.x, y: atk.y, z: atk.z, radius: 0 }, { except: client });
         return;
       }
       if (def.selfBuff === 'tomato_rage') {
         atk.tomatoRage = 6.0;
-        this.broadcast('effect', {
-          type: d.type, x: atk.x, y: atk.y, z: atk.z, radius: 0
-        }, { except: client });
+        this.broadcast('effect', { type: d.type, x: atk.x, y: atk.y, z: atk.z, radius: 0 }, { except: client });
         return;
       }
 
       const radius = def.radius;
 
-      // ═══ Урон по игрокам ═══
+      // ═══ УРОН ТОЛЬКО ПО ИГРОКАМ ═══
       this.state.players.forEach((tgt, sid) => {
         if (tgt === atk || tgt.dead) return;
-        const dSq = distXZ(atk, tgt);
+        const dx = tgt.x - atk.x;
+        const dz = tgt.z - atk.z;
+        const dSq = dx * dx + dz * dz;
         const dist = Math.sqrt(dSq);
-        if (dist > radius || dyAbs(atk, tgt) > 15) return;
+        if (dist > radius || Math.abs(tgt.y - atk.y) > 15) return;
 
         if (def.cone && dist > 0.01) {
           const fwdX = -Math.sin(atk.ry);
           const fwdZ = -Math.cos(atk.ry);
-          const dot = ((tgt.x - atk.x) * fwdX + (tgt.z - atk.z) * fwdZ) / dist;
+          const dot = (dx * fwdX + dz * fwdZ) / dist;
           if (dot < 0.5) return;
         }
 
@@ -363,26 +369,6 @@ class GameRoom extends colyseus.Room {
         }
       });
 
-      // ═══ Урон по врагам ═══
-      this.state.enemies.forEach((en, eid) => {
-        const dist = Math.sqrt(distXZ(atk, en));
-        if (dist > radius || dyAbs(atk, en) > 15) return;
-        if (def.cone && dist > 0.01) {
-          const fwdX = -Math.sin(atk.ry);
-          const fwdZ = -Math.cos(atk.ry);
-          const dot = ((en.x - atk.x) * fwdX + (en.z - atk.z) * fwdZ) / dist;
-          if (dot < 0.5) return;
-        }
-        if (dmg > 0) {
-          en.hp -= dmg;
-          if (def.freeze) en.frozen = Math.max(en.frozen || 0, def.freeze);
-          if (def.root && en.y > 0) { en.y = 0; en.anim = 0; }
-          this.lastHitBy.set(eid, client.sessionId);
-          this.broadcast('dmg', { enemyId: eid, amount: dmg, crit: false });
-          if (en.hp <= 0) this.killEnemy(eid);
-        }
-      });
-
       this.broadcast('effect', {
         type: d.type, x: atk.x, y: atk.y, z: atk.z,
         bySession: client.sessionId, byName: atk.name, radius
@@ -390,7 +376,7 @@ class GameRoom extends colyseus.Room {
     });
 
     // ═══════════════════════════════════════════════════════════════════════
-    // pvp_beam — лазер Лимона (конус, мультицель, DoT-тик)
+    // pvp_beam — лазер Лимона (конус, мультицель)
     // ═══════════════════════════════════════════════════════════════════════
     this.onMessage('pvp_beam', (client, d) => {
       if (!d || !Array.isArray(d.targetIds)) return;
@@ -401,20 +387,31 @@ class GameRoom extends colyseus.Room {
       if (Date.now() - (this.playerAttackCd.get(cdKey) || 0) < 180) return;
       this.playerAttackCd.set(cdKey, Date.now());
 
+      const ax = num(d.x, atk.x);
+      const ay = num(d.y, atk.y);
+      const az = num(d.z, atk.z);
+      if (Math.hypot(ax - atk.x, az - atk.z) < 20) {
+        atk.x = clamp(ax, -2700, 2700);
+        atk.y = clamp(ay, 0, 400);
+        atk.z = clamp(az, -2700, 2700);
+        if (typeof d.ry === 'number') atk.ry = num(d.ry, atk.ry);
+      }
+
       const beamDmg = 12;
       const beamRange = 35;
 
       d.targetIds.forEach((tid) => {
         const tgt = this.state.players.get(tid);
         if (!tgt || tgt.dead || tgt === atk) return;
-        if (Math.sqrt(distXZ(atk, tgt)) > beamRange || dyAbs(atk, tgt) > 10) return;
+        const dx = tgt.x - atk.x, dz = tgt.z - atk.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist > beamRange || Math.abs(tgt.y - atk.y) > 10) return;
 
         tgt.hp -= beamDmg;
         this.broadcast('pvp_hit', {
           attacker: atk.name, target: tgt.name, targetId: tid,
           damage: beamDmg, ability: 'lemon_laser'
         });
-
         if (tgt.hp <= 0 && !tgt.dead) {
           tgt.dead = true;
           tgt.hp = 0;
@@ -477,7 +474,7 @@ class GameRoom extends colyseus.Room {
       this.broadcast('enemies_off_changed', { off: this.state.enemiesOff });
     });
 
-    // ─── PvP melee (ближний удар) ───
+    // ─── PvP melee (ближний удар, с позицией из сообщения) ───
     this.onMessage('pvp', (client, d) => {
       if (!d || !d.targetId) return;
       const atk = this.state.players.get(client.sessionId);
@@ -488,7 +485,18 @@ class GameRoom extends colyseus.Room {
       if (Date.now() - (this.playerAttackCd.get(key) || 0) < 250) return;
       this.playerAttackCd.set(key, Date.now());
 
-      if (distXZ(atk, tgt) > 8 * 8 || dyAbs(atk, tgt) > 4) return;
+      const ax = num(d.x, atk.x);
+      const az = num(d.z, atk.z);
+      if (Math.hypot(ax - atk.x, az - atk.z) < 20) {
+        atk.x = clamp(ax, -2700, 2700);
+        atk.z = clamp(az, -2700, 2700);
+        if (typeof d.y === 'number') atk.y = clamp(num(d.y, atk.y), 0, 400);
+        if (typeof d.ry === 'number') atk.ry = num(d.ry, atk.ry);
+      }
+
+      const dx = tgt.x - atk.x;
+      const dz = tgt.z - atk.z;
+      if (dx * dx + dz * dz > 8 * 8 || Math.abs(tgt.y - atk.y) > 4) return;
 
       let dmg = 40;
       if (atk.char === 'banana') {
@@ -521,7 +529,7 @@ class GameRoom extends colyseus.Room {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Утилиты навигации
+  // Утилиты
   // ═══════════════════════════════════════════════════════════════════════
   isInsideBuilding(x, z, pad) {
     for (let i = 0; i < this.buildings.length; i++) {
@@ -569,7 +577,7 @@ class GameRoom extends colyseus.Room {
     p.char = (options && typeof options.char === 'string') ? options.char.slice(0, 12) : 'banana';
     p.name = (options && typeof options.name === 'string') ? options.name.slice(0, 16) : 'Игрок';
 
-    if (p.char === 'banana') p.maxHp = [350, 420, 600, 450, 500][p.suit] || 500;
+    if (p.char === 'banana') p.maxHp = [400, 450, 600, 500, 520][p.suit] || 500;
     else if (p.char === 'pepper') p.maxHp = 420;
     else if (p.char === 'carrot') p.maxHp = 480;
     else if (p.char === 'lemon') p.maxHp = 400;
