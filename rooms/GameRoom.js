@@ -9,10 +9,10 @@ schema.defineTypes(Player, {
   x: 'number', y: 'number', z: 'number', ry: 'number', suit: 'number', char: 'string',
   anim: 'number', name: 'string', hp: 'number', maxHp: 'number',
   dead: 'boolean', respawnTimer: 'number', pepperEvolved: 'boolean', carrotForm: 'number',
-  potatoForm: 'number', // 1 = Моргенкартошка, 2 = Громтомат
+  potatoForm: 'number',
   attackAnim: 'number', score: 'number', ep: 'number',
   rooted: 'number', frozen: 'number', kills: 'number', deaths: 'number',
-  tomatoRage: 'number' // длительность баффа Громтомата
+  tomatoRage: 'number'
 });
 
 class Enemy extends schema.Schema {}
@@ -56,53 +56,54 @@ schema.defineTypes(State, {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PVP_ABILITIES — ПОЛНЫЙ КАТАЛОГ (все персонажи)
+// PVP_ABILITIES — ПЕРЕБАЛАНСИРОВАННЫЙ КАТАЛОГ
 // ═══════════════════════════════════════════════════════════════════════════
 const PVP_ABILITIES = {
   // ═══ BANANA ═══
-  devastator:           { radius: 30,   dmg: 80,   cd: 5000,   knockback: 5 },
-  rocket:               { radius: 10,   dmg: 90,   cd: 6000,   knockback: 4 },
-  freeze:               { radius: 15,   dmg: 20,   cd: 7500,   freeze: 3.0 },
-  nano_ult:             { radius: 50,   dmg: 4000, cd: 102500, cone: true },
-  consume_heal:         { radius: 16,   dmg: 0,    cd: 8000,   heal: 75 },
-  durian_ram:           { radius: 14,   dmg: 120,  cd: 12000,  knockback: 8 },
+  devastator:           { radius: 20,   dmg: 45,   cd: 5000,   knockback: 4 },
+  rocket:               { radius: 8,    dmg: 70,   cd: 6000,   knockback: 4 },
+  freeze:               { radius: 12,   dmg: 15,   cd: 7500,   freeze: 3.0 },
+  nano_ult:             { radius: 25,   dmg: 500,  cd: 102500, cone: true },
+  consume_heal:         { radius: 12,   dmg: 0,    cd: 8000,   heal: 60 },
+  durian_ram:           { radius: 10,   dmg: 80,   cd: 12000,  knockback: 6 },
 
   // ═══ PEPPER ═══
-  fire_fist:            { radius: 7,    dmg: 45,   cd: 400,    knockback: 3 },
-  fire_beam:            { radius: 36,   dmg: 100,  cd: 2000,   cone: true, knockback: 4 },
-  hell_explosion:       { radius: 40,   dmg: 150,  cd: 100000, knockback: 10 },
-  pepper_dash:          { radius: 8,    dmg: 30,   cd: 800,    knockback: 6 },
-  pepper_dive:          { radius: 20,   dmg: 120,  cd: 3000,   knockback: 7 },
+  fire_fist:            { radius: 6,    dmg: 35,   cd: 400,    knockback: 3 },
+  fire_beam:            { radius: 30,   dmg: 70,   cd: 2000,   cone: true, knockback: 3 },
+  hell_explosion:       { radius: 30,   dmg: 100,  cd: 100000, knockback: 8 },
+  pepper_dash:          { radius: 6,    dmg: 25,   cd: 800,    knockback: 5 },
+  pepper_dive:          { radius: 15,   dmg: 90,   cd: 3000,   knockback: 6 },
   pepper_evolve:        { radius: 0,    dmg: 0,    cd: 5000,   selfBuff: 'pepper_evolved' },
 
   // ═══ CARROT ═══
-  root_bind:            { radius: 22,   dmg: 50,   cd: 1500,   root: 2.5 },
-  vine_harpoon:         { radius: 25,   dmg: 60,   cd: 1000,   pull: true },
-  earthquake:           { radius: 40,   dmg: 100,  cd: 8000,   knockback: 6 },
-  drill:                { radius: 12,   dmg: 90,   cd: 4000,   knockback: 6 },
+  root_bind:            { radius: 18,   dmg: 40,   cd: 1500,   root: 2.5 },
+  vine_harpoon:         { radius: 20,   dmg: 45,   cd: 1000,   pull: true },
+  earthquake:           { radius: 30,   dmg: 80,   cd: 8000,   knockback: 5 },
+  drill:                { radius: 10,   dmg: 70,   cd: 4000,   knockback: 5 },
   carrot_form:          { radius: 0,    dmg: 0,    cd: 5000,   selfBuff: 'carrot_form_toggle' },
-  carrot_ground_slam:   { radius: 18,   dmg: 80,   cd: 2000,   knockback: 5 },
+  carrot_ground_slam:   { radius: 15,   dmg: 60,   cd: 2000,   knockback: 4 },
 
   // ═══ LEMON ═══
-  repulse:              { radius: 10,   dmg: 60,   cd: 1000,   knockback: 8 },
-  acid_rain:            { radius: 7,    dmg: 30,   cd: 800,    dot: true },
-  lemon_salvo:          { radius: 30,   dmg: 150,  cd: 4000,   cone: true },
-  lemon_ground_slam:    { radius: 15,   dmg: 70,   cd: 1500,   knockback: 4 },
-  ult_lemon:            { radius: 40,   dmg: 120,  cd: 100000, knockback: 8 },
-  kamikaze_spider:      { radius: 10,   dmg: 80,   cd: 5000 },
+  lemon_plasma:         { radius: 4,    dmg: 30,   cd: 400,    knockback: 0 },
+  repulse:              { radius: 8,    dmg: 50,   cd: 1000,   knockback: 8 },
+  acid_rain:            { radius: 6,    dmg: 25,   cd: 800,    dot: true },
+  lemon_salvo:          { radius: 25,   dmg: 110,  cd: 4000,   cone: true },
+  lemon_ground_slam:    { radius: 12,   dmg: 55,   cd: 1500,   knockback: 4 },
+  ult_lemon:            { radius: 30,   dmg: 100,  cd: 100000, knockback: 6 },
+  kamikaze_spider:      { radius: 8,    dmg: 30,   cd: 5000 },
 
-  // ═══ POTATO (Моргенкартошка / Громтомат) ═══
-  potato_slam:          { radius: 12,   dmg: 250,  cd: 4000,   knockback: 5 },
-  potato_heal:          { radius: 0,    dmg: 0,    cd: 10000,  heal: 250 },
-  potato_ram:           { radius: 10,   dmg: 150,  cd: 6000,   knockback: 8 },
-  tomato_nova:          { radius: 12,   dmg: 300,  cd: 5000,   knockback: 7 },
+  // ═══ POTATO ═══
+  potato_slam:          { radius: 10,   dmg: 120,  cd: 4000,   knockback: 4 },
+  potato_heal:          { radius: 0,    dmg: 0,    cd: 10000,  heal: 200 },
+  potato_ram:           { radius: 8,    dmg: 90,   cd: 6000,   knockback: 6 },
+  tomato_nova:          { radius: 10,   dmg: 160,  cd: 5000,   knockback: 5 },
   tomato_rage:          { radius: 0,    dmg: 0,    cd: 12000,  selfBuff: 'tomato_rage' },
-  tomato_sauce:         { radius: 15,   dmg: 100,  cd: 3000,   knockback: 3 },
-  potato_electric_slam: { radius: 15,   dmg: 350,  cd: 5000,   knockback: 6 }
+  tomato_sauce:         { radius: 12,   dmg: 70,   cd: 3000,   knockback: 3 },
+  potato_electric_slam: { radius: 12,   dmg: 200,  cd: 5000,   knockback: 5 }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CHAR_MAP — какая способность какому персонажу разрешена
+// CHAR_MAP
 // ═══════════════════════════════════════════════════════════════════════════
 const CHAR_MAP = {
   devastator:           ['banana', 'pepper'],
@@ -126,6 +127,7 @@ const CHAR_MAP = {
   carrot_form:          ['carrot'],
   carrot_ground_slam:   ['carrot'],
 
+  lemon_plasma:         ['lemon'],
   repulse:              ['lemon'],
   acid_rain:            ['lemon'],
   lemon_salvo:          ['lemon'],
@@ -230,7 +232,6 @@ class GameRoom extends colyseus.Room {
       if (typeof d.carrotForm === 'number') p.carrotForm = clamp(d.carrotForm | 0, 1, 2);
       if (typeof d.potatoForm === 'number') p.potatoForm = clamp(d.potatoForm | 0, 1, 2);
 
-      // Пересчёт maxHp
       if (p.char === 'carrot') p.maxHp = (p.carrotForm === 2) ? 800 : 480;
       else if (p.char === 'banana') p.maxHp = [350, 420, 600, 450, 500][p.suit] || 500;
       else if (p.char === 'pepper') p.maxHp = 420;
@@ -246,7 +247,7 @@ class GameRoom extends colyseus.Room {
       if (p && !p.dead) p.attackAnim = 1;
     });
 
-    // ─── Hits on enemies (from client's local auto-attacks) ───
+    // ─── Hits on enemies ───
     this.onMessage('hit_batch', (client, d) => {
       if (!d || !Array.isArray(d.hits)) return;
       const attacker = this.state.players.get(client.sessionId);
@@ -268,7 +269,7 @@ class GameRoom extends colyseus.Room {
     });
 
     // ═══════════════════════════════════════════════════════════════════════
-    // pvp_ability — ОСНОВНОЙ ОБРАБОТЧИК ВСЕХ СПОСОБНОСТЕЙ
+    // pvp_ability — основной обработчик
     // ═══════════════════════════════════════════════════════════════════════
     this.onMessage('pvp_ability', (client, d) => {
       if (!d || !d.type) return;
@@ -278,22 +279,17 @@ class GameRoom extends colyseus.Room {
       const def = PVP_ABILITIES[d.type];
       if (!def) return;
 
-      // Валидация: только своему персонажу
       const allowed = CHAR_MAP[d.type];
       if (allowed && allowed.indexOf(atk.char) === -1) return;
 
-      // Кулдаун
       const cdKey = 'pva_' + client.sessionId + '_' + d.type;
       if (Date.now() - (this.playerAttackCd.get(cdKey) || 0) < def.cd) return;
       this.playerAttackCd.set(cdKey, Date.now());
 
-      // Урон зависит от персонажа
       let dmg = def.dmg;
-      if (d.type === 'devastator' && atk.char === 'pepper') dmg = 100;
+      if (d.type === 'devastator' && atk.char === 'pepper') dmg = 55;
 
-      // ═════════════════════════════════════════════════════════════════════
-      // SELF-ONLY эффекты — вне цикла по целям!
-      // ═════════════════════════════════════════════════════════════════════
+      // ═══ SELF-ONLY эффекты ═══
       if (def.heal && def.heal > 0) {
         atk.hp = Math.min(atk.maxHp, atk.hp + def.heal);
         this.broadcast('effect', {
@@ -301,7 +297,6 @@ class GameRoom extends colyseus.Room {
         }, { except: client });
         return;
       }
-
       if (def.selfBuff === 'pepper_evolved') {
         atk.pepperEvolved = true;
         this.broadcast('effect', {
@@ -309,7 +304,6 @@ class GameRoom extends colyseus.Room {
         }, { except: client });
         return;
       }
-
       if (def.selfBuff === 'carrot_form_toggle') {
         atk.carrotForm = (atk.carrotForm === 2) ? 1 : 2;
         atk.maxHp = (atk.carrotForm === 2) ? 800 : 480;
@@ -319,7 +313,6 @@ class GameRoom extends colyseus.Room {
         }, { except: client });
         return;
       }
-
       if (def.selfBuff === 'tomato_rage') {
         atk.tomatoRage = 6.0;
         this.broadcast('effect', {
@@ -330,17 +323,13 @@ class GameRoom extends colyseus.Room {
 
       const radius = def.radius;
 
-      // ═════════════════════════════════════════════════════════════════════
-      // УРОН И ЭФФЕКТЫ ПО ИГРОКАМ
-      // ═════════════════════════════════════════════════════════════════════
+      // ═══ Урон по игрокам ═══
       this.state.players.forEach((tgt, sid) => {
         if (tgt === atk || tgt.dead) return;
-
         const dSq = distXZ(atk, tgt);
         const dist = Math.sqrt(dSq);
         if (dist > radius || dyAbs(atk, tgt) > 15) return;
 
-        // Cone-проверка для fire_beam, lemon_salvo, nano_ult
         if (def.cone && dist > 0.01) {
           const fwdX = -Math.sin(atk.ry);
           const fwdZ = -Math.cos(atk.ry);
@@ -348,20 +337,15 @@ class GameRoom extends colyseus.Room {
           if (dot < 0.5) return;
         }
 
-        // Урон
         if (dmg > 0) tgt.hp -= dmg;
-
-        // Root / Freeze (не перезаписываем более длинные)
         if (def.root && (tgt.rooted || 0) < def.root) tgt.rooted = def.root;
         if (def.freeze && (tgt.frozen || 0) < def.freeze) tgt.frozen = def.freeze;
 
-        // Визуальный фидбэк
         if (dmg > 0) {
           this.broadcast('pvp_hit', {
             attacker: atk.name, target: tgt.name, targetId: sid,
             damage: dmg, ability: d.type
           });
-
           if (tgt.hp <= 0 && !tgt.dead) {
             tgt.dead = true;
             tgt.hp = 0;
@@ -379,20 +363,16 @@ class GameRoom extends colyseus.Room {
         }
       });
 
-      // ═════════════════════════════════════════════════════════════════════
-      // УРОН ПО ВРАГАМ (PvE)
-      // ═════════════════════════════════════════════════════════════════════
+      // ═══ Урон по врагам ═══
       this.state.enemies.forEach((en, eid) => {
         const dist = Math.sqrt(distXZ(atk, en));
         if (dist > radius || dyAbs(atk, en) > 15) return;
-
         if (def.cone && dist > 0.01) {
           const fwdX = -Math.sin(atk.ry);
           const fwdZ = -Math.cos(atk.ry);
           const dot = ((en.x - atk.x) * fwdX + (en.z - atk.z) * fwdZ) / dist;
           if (dot < 0.5) return;
         }
-
         if (dmg > 0) {
           en.hp -= dmg;
           if (def.freeze) en.frozen = Math.max(en.frozen || 0, def.freeze);
@@ -403,22 +383,62 @@ class GameRoom extends colyseus.Room {
         }
       });
 
-      // Визуал для остальных
       this.broadcast('effect', {
         type: d.type, x: atk.x, y: atk.y, z: atk.z,
         bySession: client.sessionId, byName: atk.name, radius
       }, { except: client });
     });
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // pvp_beam — лазер Лимона (конус, мультицель, DoT-тик)
+    // ═══════════════════════════════════════════════════════════════════════
+    this.onMessage('pvp_beam', (client, d) => {
+      if (!d || !Array.isArray(d.targetIds)) return;
+      const atk = this.state.players.get(client.sessionId);
+      if (!atk || atk.dead || atk.char !== 'lemon') return;
+
+      const cdKey = 'beam_' + client.sessionId;
+      if (Date.now() - (this.playerAttackCd.get(cdKey) || 0) < 180) return;
+      this.playerAttackCd.set(cdKey, Date.now());
+
+      const beamDmg = 12;
+      const beamRange = 35;
+
+      d.targetIds.forEach((tid) => {
+        const tgt = this.state.players.get(tid);
+        if (!tgt || tgt.dead || tgt === atk) return;
+        if (Math.sqrt(distXZ(atk, tgt)) > beamRange || dyAbs(atk, tgt) > 10) return;
+
+        tgt.hp -= beamDmg;
+        this.broadcast('pvp_hit', {
+          attacker: atk.name, target: tgt.name, targetId: tid,
+          damage: beamDmg, ability: 'lemon_laser'
+        });
+
+        if (tgt.hp <= 0 && !tgt.dead) {
+          tgt.dead = true;
+          tgt.hp = 0;
+          tgt.respawnTimer = 6;
+          tgt.rooted = 0;
+          tgt.frozen = 0;
+          tgt.deaths++;
+          atk.kills++;
+          atk.score += 300;
+          this.broadcast('pvp_kill', { killer: atk.name, victim: tgt.name });
+          this.broadcast('kill_feed', {
+            killer: atk.name, victim: tgt.name, isPvp: true, ability: 'lemon_laser'
+          });
+        }
+      });
+    });
+
     // ─── Spiders ───
     this.onMessage('spawn_spiders', (client, d) => {
       const p = this.state.players.get(client.sessionId);
       if (!p || p.dead || p.char !== 'lemon') return;
-
       let owned = 0;
       this.state.spiders.forEach(s => { if (s.owner === client.sessionId) owned++; });
       const toAdd = Math.min(num(d && d.count, 2), 4 - owned);
-
       for (let i = 0; i < toAdd; i++) {
         const sp = new Spider();
         const a = rand() * Math.PI * 2;
@@ -457,7 +477,7 @@ class GameRoom extends colyseus.Room {
       this.broadcast('enemies_off_changed', { off: this.state.enemiesOff });
     });
 
-    // ─── PvP melee (ближняя атака игрок→игрок) ───
+    // ─── PvP melee (ближний удар) ───
     this.onMessage('pvp', (client, d) => {
       if (!d || !d.targetId) return;
       const atk = this.state.players.get(client.sessionId);
@@ -472,13 +492,13 @@ class GameRoom extends colyseus.Room {
 
       let dmg = 40;
       if (atk.char === 'banana') {
-        if (atk.suit === 2) dmg = 65;
-        if (atk.suit === 4) dmg = 55;
+        if (atk.suit === 2) dmg = 55;
+        if (atk.suit === 4) dmg = 50;
       } else if (atk.char === 'carrot') {
-        dmg = (atk.carrotForm === 2) ? 80 : 45;
-      } else if (atk.char === 'lemon') dmg = 50;
+        dmg = (atk.carrotForm === 2) ? 70 : 45;
+      } else if (atk.char === 'lemon') dmg = 45;
       else if (atk.char === 'pepper') dmg = 45;
-      else if (atk.char === 'potato') dmg = (atk.potatoForm === 1) ? 85 : 55;
+      else if (atk.char === 'potato') dmg = (atk.potatoForm === 1) ? 75 : 55;
 
       tgt.hp -= dmg;
       this.broadcast('pvp_hit', {
@@ -779,6 +799,7 @@ class GameRoom extends colyseus.Room {
       const dx = target.x - sp.x, dz = target.z - sp.z;
       const dist = Math.sqrt(dx*dx + dz*dz);
 
+      // ─── Kamikaze ───
       if (sp.isKamikaze) {
         if (dist < 4.5) {
           if (!this.kamikazeTimers.has(id)) {
@@ -794,10 +815,10 @@ class GameRoom extends colyseus.Room {
             this.broadcast('effect', { type: 'kamikaze', x: sp.x, y: 1, z: sp.z, radius: 6 });
             if (sp.targetType === 'player') {
               if ((target.x - sp.x)**2 + (target.z - sp.z)**2 < 36) {
-                target.hp -= 150;
+                target.hp -= 200;
                 this.broadcast('pvp_hit', {
                   attacker: 'Паук-камикадзе', target: target.name,
-                  targetId: sp.targetId, damage: 150, ability: 'kamikaze'
+                  targetId: sp.targetId, damage: 200, ability: 'kamikaze'
                 });
                 if (target.hp <= 0 && !target.dead) {
                   target.dead = true;
@@ -810,7 +831,7 @@ class GameRoom extends colyseus.Room {
             } else {
               this.state.enemies.forEach((e, eid) => {
                 if ((e.x - sp.x)**2 + (e.z - sp.z)**2 < 36) {
-                  e.hp -= 200;
+                  e.hp -= 250;
                   this.lastHitBy.set(eid, sp.owner);
                   if (e.hp <= 0) this.killEnemy(eid);
                 }
@@ -828,6 +849,7 @@ class GameRoom extends colyseus.Room {
         }
       }
 
+      // ─── Обычный паук ───
       if (dist > 3) {
         const nx = sp.x + dx * (1/(dist||1)) * 14 * dt;
         const nz = sp.z + dz * (1/(dist||1)) * 14 * dt;
@@ -836,12 +858,12 @@ class GameRoom extends colyseus.Room {
 
       const cdKey = 'spider_' + id;
       if ((this.attackCooldowns.get(cdKey) || 0) <= 0 && dist < 25) {
-        this.attackCooldowns.set(cdKey, 0.6);
+        this.attackCooldowns.set(cdKey, 0.5);
         if (sp.targetType === 'player') {
-          target.hp -= 15;
+          target.hp -= 30;
           this.broadcast('pvp_hit', {
-            attacker: 'Паук', target: target.name,
-            targetId: sp.targetId, damage: 15, ability: 'spider_bite'
+            attacker: 'Паук Лимона', target: target.name,
+            targetId: sp.targetId, damage: 30, ability: 'spider_bite'
           });
           if (target.hp <= 0 && !target.dead) {
             target.dead = true;
@@ -851,9 +873,9 @@ class GameRoom extends colyseus.Room {
             this.broadcast('pvp_kill', { killer: 'Паук Лимона', victim: target.name });
           }
         } else {
-          target.hp -= 22;
+          target.hp -= 40;
           this.lastHitBy.set(sp.targetId, sp.owner);
-          this.broadcast('dmg', { enemyId: sp.targetId, amount: 22, crit: false });
+          this.broadcast('dmg', { enemyId: sp.targetId, amount: 40, crit: false });
           if (target.hp <= 0) this.killEnemy(sp.targetId);
         }
       } else {
@@ -884,7 +906,6 @@ class GameRoom extends colyseus.Room {
       const dy = dyAbs(bestP, en);
       en.ry = Math.atan2(bestP.x - en.x, bestP.z - en.z);
 
-      // Boss special
       if (en.isBoss) {
         if ((this.bossAttackCd.get(id) || 0) > 0) {
           this.bossAttackCd.set(id, this.bossAttackCd.get(id) - dt);
